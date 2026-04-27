@@ -33,6 +33,9 @@ type Avatar = {
 };
 
 const PLAYER_SIZE = 28;
+const SELF_RECONCILE_IGNORE_DISTANCE = 12;
+const SELF_RECONCILE_SNAP_DISTANCE = 96;
+const SELF_RECONCILE_LERP_FACTOR = 0.35;
 
 export class MultiplayerScene extends Phaser.Scene {
   private readonly socket: GameSocket;
@@ -279,17 +282,7 @@ export class MultiplayerScene extends Phaser.Scene {
 
   private handleRemoteMove(payload: PlayerMovedPayload) {
     if (payload.id === this.selfId) {
-      if (!this.localAvatar) {
-        return;
-      }
-
-      this.localAvatar.root.setPosition(payload.x, payload.y);
-      this.localAvatar.targetX = payload.x;
-      this.localAvatar.targetY = payload.y;
-      this.localAvatar.state = {
-        ...this.localAvatar.state,
-        ...payload
-      };
+      this.reconcileLocalAvatar(payload);
       return;
     }
 
@@ -303,6 +296,33 @@ export class MultiplayerScene extends Phaser.Scene {
     avatar.state = {
       ...avatar.state,
       ...payload
+    };
+  }
+
+  private reconcileLocalAvatar(payload: PlayerMovedPayload) {
+    if (!this.localAvatar) {
+      return;
+    }
+
+    const deltaX = payload.x - this.localAvatar.root.x;
+    const deltaY = payload.y - this.localAvatar.root.y;
+    const distance = Math.hypot(deltaX, deltaY);
+
+    if (distance >= SELF_RECONCILE_SNAP_DISTANCE) {
+      this.localAvatar.root.setPosition(payload.x, payload.y);
+    } else if (distance >= SELF_RECONCILE_IGNORE_DISTANCE) {
+      const nextX = Phaser.Math.Linear(this.localAvatar.root.x, payload.x, SELF_RECONCILE_LERP_FACTOR);
+      const nextY = Phaser.Math.Linear(this.localAvatar.root.y, payload.y, SELF_RECONCILE_LERP_FACTOR);
+      this.localAvatar.root.setPosition(nextX, nextY);
+    }
+
+    this.localAvatar.targetX = this.localAvatar.root.x;
+    this.localAvatar.targetY = this.localAvatar.root.y;
+    this.localAvatar.state = {
+      ...this.localAvatar.state,
+      ...payload,
+      x: this.localAvatar.root.x,
+      y: this.localAvatar.root.y
     };
   }
 
