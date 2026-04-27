@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: untitled-web-game-socket
+    runtime: node
+    plan: free
+    region: singapore
+    buildCommand: npm install && npm run build:server
+    startCommand: npm run start:server
+    healthCheckPath: /health
+    autoDeployTrigger: commit
+    envVars:
+      - key: PORT
+        value: "10000"
+      - key: CLIENT_ORIGIN
+        sync: false

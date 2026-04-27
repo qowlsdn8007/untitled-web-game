@@ -90,6 +90,82 @@ npm run preview
 node dist-server/server/index.js
 ```
 
+## 배포
+
+이 프로젝트는 아래 조합으로 배포하는 것을 기준으로 준비되어 있습니다.
+
+- 클라이언트: `Vercel`
+- Socket 서버: `Render Web Service`
+
+### 1. Render에 Socket 서버 배포
+
+레포 루트에 [render.yaml](/Users/bjw/Documents/Codex/2026-04-27-new-chat/render.yaml)이 포함되어 있어 Render Blueprint 또는 일반 Web Service 생성에 그대로 사용할 수 있습니다.
+
+권장 설정:
+
+- Runtime: `Node`
+- Plan: `Free`
+- Build Command: `npm install && npm run build:server`
+- Start Command: `npm run start:server`
+- Health Check Path: `/health`
+
+Render에서 반드시 설정할 환경 변수:
+
+- `CLIENT_ORIGIN=https://your-vercel-project.vercel.app`
+
+참고:
+
+- Render는 웹 서비스가 `0.0.0.0`과 지정 포트에 바인딩되어야 합니다.
+- 이 서버는 `PORT` 환경 변수를 지원하며, Render 기본 포트 `10000`에서 동작하도록 준비되어 있습니다.
+- 무료 인스턴스는 유휴 시간이 길면 잠들 수 있어 첫 연결이 느릴 수 있습니다.
+
+배포 후 확인할 주소:
+
+```text
+https://your-render-service.onrender.com/health
+```
+
+정상 응답 예시:
+
+```json
+{"ok":true,"players":0,"mapId":"starter-plaza"}
+```
+
+### 2. Vercel에 클라이언트 배포
+
+이 프로젝트는 Vite 기반이라 Vercel에서 바로 import 가능합니다.
+
+Vercel 프로젝트 설정:
+
+- Framework Preset: `Vite`
+- Root Directory: `/`
+- Build Command: `npm run build:client`
+- Output Directory: `dist`
+
+Vercel 환경 변수:
+
+- `VITE_SERVER_URL=https://your-render-service.onrender.com`
+
+배포가 끝나면 `CLIENT_ORIGIN` 값을 Vercel 배포 주소로 다시 맞춰 Render에 저장하세요.
+
+예:
+
+```text
+CLIENT_ORIGIN=https://untitled-web-game.vercel.app
+```
+
+### 3. 배포 순서 권장
+
+1. Render에 서버를 먼저 배포한다.
+2. Render 서비스 URL을 확인한다.
+3. Vercel에 `VITE_SERVER_URL`을 넣고 클라이언트를 배포한다.
+4. Vercel 배포 URL을 확인한 뒤 Render의 `CLIENT_ORIGIN`을 그 주소로 업데이트한다.
+5. 브라우저 2개 이상으로 접속해 멀티플레이를 확인한다.
+
+### 4. 환경 변수 예시 파일
+
+로컬 확인용 예시는 [.env.example](/Users/bjw/Documents/Codex/2026-04-27-new-chat/.env.example)에 들어 있습니다.
+
 ## 환경 변수
 
 현재 구현은 선택적으로 아래 환경 변수를 지원합니다.
