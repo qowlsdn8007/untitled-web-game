@@ -47,6 +47,14 @@ export class MultiplayerScene extends Phaser.Scene {
   private lastDirection: Direction = "down";
   private lastSent = 0;
   private sequence = 0;
+  private readonly handleWindowBlur = () => {
+    this.resetInputState();
+  };
+  private readonly handleVisibilityChange = () => {
+    if (document.hidden) {
+      this.resetInputState();
+    }
+  };
 
   constructor(options: SceneOptions) {
     super("MultiplayerScene");
@@ -68,6 +76,10 @@ export class MultiplayerScene extends Phaser.Scene {
     this.physics.world.setBounds(0, 0, MAP_WIDTH * TILE_SIZE, MAP_HEIGHT * TILE_SIZE);
 
     this.bindSocketEvents();
+    window.addEventListener("blur", this.handleWindowBlur);
+    document.addEventListener("visibilitychange", this.handleVisibilityChange);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.cleanupScene, this);
+    this.events.once(Phaser.Scenes.Events.DESTROY, this.cleanupScene, this);
   }
 
   update(_: number, delta: number) {
@@ -317,5 +329,41 @@ export class MultiplayerScene extends Phaser.Scene {
   private syncPlayerCount() {
     const localCount = this.localAvatar ? 1 : 0;
     this.onPlayerCountChange(localCount + this.remotePlayers.size);
+  }
+
+  private resetInputState() {
+    this.input.keyboard?.resetKeys();
+    this.stopLocalMovement();
+  }
+
+  private stopLocalMovement() {
+    if (!this.localAvatar) {
+      return;
+    }
+
+    if (!this.localAvatar.state.moving) {
+      return;
+    }
+
+    this.localAvatar.state.moving = false;
+    this.localAvatar.sprite.setFillStyle(0xf59e0b, 1);
+    this.localAvatar.label.setText(this.nickname);
+    this.lastSent = this.time.now;
+    this.sequence += 1;
+
+    const payload: MovePayload = {
+      x: this.localAvatar.state.x,
+      y: this.localAvatar.state.y,
+      direction: this.lastDirection,
+      moving: false,
+      seq: this.sequence
+    };
+
+    this.socket.emit("player:move", payload);
+  }
+
+  private cleanupScene() {
+    window.removeEventListener("blur", this.handleWindowBlur);
+    document.removeEventListener("visibilitychange", this.handleVisibilityChange);
   }
 }
