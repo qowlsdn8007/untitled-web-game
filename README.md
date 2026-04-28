@@ -39,6 +39,23 @@ src/
     map.ts                   # 공용 충돌 타일 규칙
 ```
 
+## AI Harness
+
+이 레포는 설치된 skills를 기준으로 동작하는 프로젝트 harness를 포함합니다.
+
+- 메인 harness: [AGENTS.md](/Users/bjw/Documents/Codex/2026-04-27-new-chat/AGENTS.md)
+- frontend 지침: [frontend.md](/Users/bjw/Documents/Codex/2026-04-27-new-chat/docs/harness/frontend.md)
+- multiplayer 지침: [multiplayer.md](/Users/bjw/Documents/Codex/2026-04-27-new-chat/docs/harness/multiplayer.md)
+- architecture 지침: [architecture.md](/Users/bjw/Documents/Codex/2026-04-27-new-chat/docs/harness/architecture.md)
+- deployment 지침: [deployment.md](/Users/bjw/Documents/Codex/2026-04-27-new-chat/docs/harness/deployment.md)
+- documentation 지침: [documentation.md](/Users/bjw/Documents/Codex/2026-04-27-new-chat/docs/harness/documentation.md)
+
+핵심 원칙:
+
+- `solid`는 모든 코드 작업의 기본 품질 레이어로 사용합니다.
+- 작업 유형에 따라 React, TypeScript, WebSocket, deployment, documentation 관련 skill을 선택적으로 활성화합니다.
+- 구조 변경이나 복잡한 백엔드 아키텍처는 필요할 때만 `feature-sliced-design`, `clean-ddd-hexagonal`을 적용합니다.
+
 ## 요구 사항
 
 - Node.js `20+`
