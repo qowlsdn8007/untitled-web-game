@@ -5,6 +5,7 @@ Use this file for Render, Vercel, CI/CD, environment variables, deployment valid
 ## Skills To Activate
 
 - `solid`
+- `tdd`
 - `deployment-pipeline-design`
 - `documentation-writer` when the task includes operator-facing docs
 
@@ -38,4 +39,3 @@ Use this file for Render, Vercel, CI/CD, environment variables, deployment valid
 - Overbuilding CI/CD for a simple demo
 - Introducing infra assumptions not supported by the chosen hosts
 - Hiding required env vars or deploy steps
-

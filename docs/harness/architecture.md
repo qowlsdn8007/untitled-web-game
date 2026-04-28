@@ -5,6 +5,7 @@ Use this file when changing project structure, ownership boundaries, or backend 
 ## Skills To Activate
 
 - `solid`
+- `tdd`
 - `feature-sliced-design`
 
 Activate `clean-ddd-hexagonal` only when backend/domain complexity clearly justifies it.
@@ -40,4 +41,3 @@ Activate `clean-ddd-hexagonal` only when backend/domain complexity clearly justi
 - Applying DDD vocabulary without domain complexity
 - Extracting FSD layers “just in case”
 - Letting architecture work dominate feature delivery
-

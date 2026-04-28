@@ -5,6 +5,7 @@ Use this file for React, Vite, TypeScript, and Phaser-adjacent UI work.
 ## Skills To Activate
 
 - `solid`
+- `tdd`
 - `vercel-react-best-practices`
 - `typescript-advanced-types`
 
@@ -17,6 +18,7 @@ Use `feature-sliced-design` only if the task is structural.
 - Prefer clear component boundaries over broad shared abstractions.
 - Preserve Vite-compatible behavior and client env rules.
 - Keep TypeScript strict and avoid weakening types to silence errors.
+- For logic-heavy UI behavior, add focused behavior tests first when practical.
 - Reuse shared protocol types instead of redefining payloads locally.
 
 ## Defaults
@@ -38,4 +40,3 @@ Use `feature-sliced-design` only if the task is structural.
 - Shared state duplication between React and Phaser
 - Duplicated network payload interfaces
 - Heavy abstractions for one-off UI code
-

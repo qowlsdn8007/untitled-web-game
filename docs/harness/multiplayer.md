@@ -5,6 +5,7 @@ Use this file for Socket.IO, real-time synchronization, movement, latency, conne
 ## Skills To Activate
 
 - `solid`
+- `tdd`
 - `websocket-engineer`
 - `typescript-advanced-types`
 
@@ -16,6 +17,7 @@ Use `clean-ddd-hexagonal` only if multiplayer server responsibilities grow into 
 - Treat local prediction and remote synchronization as separate concerns.
 - Be cautious when applying echoed server updates to the local player.
 - Preserve shared event contracts in centralized protocol types.
+- Prefer test-first coverage for pure movement, occupancy, and synchronization helpers.
 - Prefer incremental multiplayer improvements over full networking rewrites.
 
 ## Connection and State Rules
@@ -42,4 +44,3 @@ Use `clean-ddd-hexagonal` only if multiplayer server responsibilities grow into 
 - Duplicating socket payload types
 - Mixing transport concerns with scene rendering code
 - Introducing complexity that does not improve actual multiplayer behavior
-

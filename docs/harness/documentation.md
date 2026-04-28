@@ -6,6 +6,7 @@ Use this file when writing or refactoring README content, technical guides, usag
 
 - `documentation-writer`
 - `solid`
+- `tdd`
 
 Use `deployment-pipeline-design` alongside this file for deployment or operational docs.
 
@@ -31,4 +32,3 @@ Choose the right mode before writing:
 - Mixing explanation and step-by-step instructions carelessly
 - Documenting unimplemented behavior
 - Overspecifying future architecture as if it already exists
-

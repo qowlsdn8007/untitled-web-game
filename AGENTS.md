@@ -38,6 +38,7 @@ The project is currently demo-scale. Prefer solutions that are simple, maintaina
 ### Project-local skills
 
 - `solid`
+- `tdd`
 - `websocket-engineer`
 - `clean-ddd-hexagonal`
 - `feature-sliced-design`
@@ -58,13 +59,17 @@ Installed skills are part of the default workflow and should be used when releva
 ### Always-on quality layer
 
 - `solid`
+- `tdd`
 
-Apply `solid` to all coding work as the default quality baseline.
+Apply `solid` and `tdd` to coding work as the default quality baseline.
 
 Interpret it with project-scale judgment:
 
 - prefer clean code, focused units, low coupling, and good naming
 - prefer testability and maintainability
+- prefer red-green-refactor with small vertical slices when practical
+- write behavior-focused tests through public interfaces when adding or changing core logic
+- if no test harness exists yet, introduce the lightest useful test coverage for the changed behavior rather than skipping tests by default
 - do not force heavyweight abstractions, object wrapping, or full TDD ceremony when that would clearly overcomplicate this demo-scale codebase
 - use its principles as a quality filter, not as permission to over-engineer
 
@@ -154,4 +159,3 @@ Use the minimum relevant sub-harness files for a task.
 - Snapping the local player to every echoed server update
 - Mixing React state and Phaser scene state without clear boundaries
 - Introducing deployment assumptions that break Render free-tier behavior
-
