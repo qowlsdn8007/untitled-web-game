@@ -3,18 +3,16 @@ import cors from "cors";
 import { createServer } from "node:http";
 import { Server } from "socket.io";
 import {
-  TILE_SIZE,
+  SERVER_TICK_MS,
   type ClientToServerEvents,
-  type Direction,
   type JoinPayload,
-  type MovePayload,
-  type PlayerState,
+  type PlayerInputPayload,
   type PlayerUpdatedPayload,
   type ServerToClientEvents
 } from "../shared/protocol.js";
-import { isBlockedAt } from "../shared/map.js";
 import { clearPendingStart, syncMatchLifecycle } from "./game/match.js";
 import { createInitialGameState, createPlayerState, createWorldSnapshot } from "./game/state.js";
+import { stepPlayerMovement } from "./game/movement.js";
 
 type InterServerEvents = Record<string, never>;
 type SocketData = {
@@ -61,34 +59,17 @@ io.on("connection", (socket) => {
     syncMatchLifecycle(io, gameState);
   });
 
-  socket.on("player:move", (payload: MovePayload) => {
+  socket.on("player:input", (payload: PlayerInputPayload) => {
     const playerId = socket.data.playerId;
     if (!playerId) {
       return;
     }
 
-    const currentPlayer = gameState.players.get(playerId);
-    if (!currentPlayer) {
+    if (!gameState.players.has(playerId)) {
       return;
     }
 
-    const nextState = normalizeMove(currentPlayer, payload);
-    gameState.players.set(playerId, nextState);
-
-    const playerUpdatedPayload: PlayerUpdatedPayload = {
-      id: playerId,
-      tileX: nextState.tileX,
-      tileY: nextState.tileY,
-      pixelX: nextState.pixelX,
-      pixelY: nextState.pixelY,
-      direction: nextState.direction,
-      moving: nextState.moving,
-      alive: nextState.alive,
-      activeBombs: nextState.activeBombs,
-      flameRange: nextState.flameRange
-    };
-
-    io.emit("player:updated", playerUpdatedPayload);
+    gameState.playerInputs.set(playerId, payload);
   });
 
   socket.on("disconnect", () => {
@@ -98,10 +79,29 @@ io.on("connection", (socket) => {
     }
 
     gameState.players.delete(playerId);
+    gameState.playerInputs.delete(playerId);
     socket.broadcast.emit("player:left", { id: playerId });
     syncMatchLifecycle(io, gameState);
   });
 });
+
+const tickTimer = setInterval(() => {
+  if (gameState.match.status !== "running") {
+    return;
+  }
+
+  gameState.players.forEach((player, playerId) => {
+    const input = gameState.playerInputs.get(playerId);
+    const nextState = stepPlayerMovement(player, input, gameState.grid, SERVER_TICK_MS);
+
+    if (!didPlayerChange(player, nextState)) {
+      return;
+    }
+
+    gameState.players.set(playerId, nextState);
+    io.emit("player:updated", toPlayerUpdatedPayload(nextState));
+  });
+}, SERVER_TICK_MS);
 
 const port = Number(process.env.PORT ?? 3001);
 server.listen(port, () => {
@@ -110,6 +110,12 @@ server.listen(port, () => {
 
 process.on("SIGTERM", () => {
   clearPendingStart(gameState);
+  clearInterval(tickTimer);
+});
+
+process.on("SIGINT", () => {
+  clearPendingStart(gameState);
+  clearInterval(tickTimer);
 });
 
 function sanitizeNickname(nickname: string): string {
@@ -117,41 +123,28 @@ function sanitizeNickname(nickname: string): string {
   return trimmed.length > 0 ? trimmed : "guest";
 }
 
-function normalizeMove(currentPlayer: PlayerState, payload: MovePayload): PlayerState {
-  const half = 14;
-  const maxPixelX = gameState.grid[0].length * TILE_SIZE - half;
-  const maxPixelY = gameState.grid.length * TILE_SIZE - half;
-  const pixelX = clamp(payload.x, half, maxPixelX);
-  const pixelY = clamp(payload.y, half, maxPixelY);
-  const direction = sanitizeDirection(payload.direction);
-  const canOccupy =
-    !isBlockedAt(pixelX - half, pixelY - half, gameState.grid) &&
-    !isBlockedAt(pixelX + half, pixelY - half, gameState.grid) &&
-    !isBlockedAt(pixelX - half, pixelY + half, gameState.grid) &&
-    !isBlockedAt(pixelX + half, pixelY + half, gameState.grid);
-
-  const resolvedX = canOccupy ? pixelX : currentPlayer.pixelX;
-  const resolvedY = canOccupy ? pixelY : currentPlayer.pixelY;
-
+function toPlayerUpdatedPayload(player: import("../shared/protocol.js").PlayerState): PlayerUpdatedPayload {
   return {
-    ...currentPlayer,
-    tileX: Math.floor(resolvedX / TILE_SIZE),
-    tileY: Math.floor(resolvedY / TILE_SIZE),
-    pixelX: resolvedX,
-    pixelY: resolvedY,
-    direction,
-    moving: Boolean(payload.moving)
+    id: player.id,
+    tileX: player.tileX,
+    tileY: player.tileY,
+    pixelX: player.pixelX,
+    pixelY: player.pixelY,
+    direction: player.direction,
+    moving: player.moving,
+    alive: player.alive,
+    activeBombs: player.activeBombs,
+    flameRange: player.flameRange
   };
 }
 
-function sanitizeDirection(direction: Direction): Direction {
-  if (direction === "up" || direction === "down" || direction === "left" || direction === "right") {
-    return direction;
-  }
-
-  return "down";
-}
-
-function clamp(value: number, min: number, max: number): number {
-  return Math.min(max, Math.max(min, value));
+function didPlayerChange(previous: import("../shared/protocol.js").PlayerState, next: import("../shared/protocol.js").PlayerState): boolean {
+  return (
+    previous.tileX !== next.tileX ||
+    previous.tileY !== next.tileY ||
+    previous.pixelX !== next.pixelX ||
+    previous.pixelY !== next.pixelY ||
+    previous.direction !== next.direction ||
+    previous.moving !== next.moving
+  );
 }

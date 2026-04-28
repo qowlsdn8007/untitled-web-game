@@ -9,6 +9,7 @@ export const MATCH_START_DELAY_MS = 2_000;
 export const ROUND_RESTART_DELAY_MS = 3_000;
 export const BOMB_FUSE_MS = 2_000;
 export const FLAME_DURATION_MS = 500;
+export const SERVER_TICK_MS = 50;
 export const DEFAULT_BOMB_CAPACITY = 1;
 export const DEFAULT_FLAME_RANGE = 1;
 
@@ -92,6 +93,12 @@ export type PlayerInputPayload = {
   seq: number;
 };
 
+export type PlayerInputState = {
+  direction: Direction;
+  moving: boolean;
+  seq: number;
+};
+
 export type WorldInitPayload = {
   selfId: string;
   mapId: string;
@@ -134,7 +141,6 @@ export type ServerToClientEvents = {
 
 export type ClientToServerEvents = {
   "player:join": (payload: JoinPayload) => void;
-  "player:move": (payload: MovePayload) => void;
   "player:input": (payload: PlayerInputPayload) => void;
 };
 

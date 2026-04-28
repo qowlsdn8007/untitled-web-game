@@ -7,12 +7,11 @@ import {
   SPAWN_POINT,
   TILE_SIZE,
   type Direction,
-  type MovePayload,
+  type PlayerInputPayload,
   type PlayerUpdatedPayload,
   type PlayerState,
   type WorldInitPayload
 } from "../../shared/protocol";
-import { isBlockedAt } from "../../shared/map";
 import { drawMap } from "./map";
 import type { GameSocket } from "../network/gameSocket";
 
@@ -48,8 +47,12 @@ export class MultiplayerScene extends Phaser.Scene {
   private selfId: string | null = null;
   private localAvatar?: Avatar;
   private lastDirection: Direction = "down";
-  private lastSent = 0;
   private sequence = 0;
+  private lastInputState: PlayerInputPayload = {
+    direction: "down",
+    moving: false,
+    seq: 0
+  };
   private readonly handleWindowBlur = () => {
     this.resetInputState();
   };
@@ -87,7 +90,7 @@ export class MultiplayerScene extends Phaser.Scene {
 
   update(_: number, delta: number) {
     this.updateLocalPlayer(delta);
-    this.updateRemotePlayers(delta);
+    this.updateAllPlayers(delta);
   }
 
   private bindSocketEvents() {
@@ -204,81 +207,57 @@ export class MultiplayerScene extends Phaser.Scene {
     };
   }
 
-  private updateLocalPlayer(delta: number) {
+  private updateLocalPlayer(_: number) {
     if (!this.localAvatar || !this.cursors) {
       return;
     }
 
-    const previousX = this.localAvatar.state.pixelX;
-    const previousY = this.localAvatar.state.pixelY;
-    const previousMoving = this.localAvatar.state.moving;
-    const input = new Phaser.Math.Vector2(0, 0);
+    let moving = false;
+    let direction = this.lastDirection;
 
     if (this.cursors.left.isDown) {
-      input.x -= 1;
-      this.lastDirection = "left";
+      direction = "left";
+      moving = true;
     } else if (this.cursors.right.isDown) {
-      input.x += 1;
-      this.lastDirection = "right";
+      direction = "right";
+      moving = true;
     }
 
     if (this.cursors.up.isDown) {
-      input.y -= 1;
-      this.lastDirection = "up";
+      direction = "up";
+      moving = true;
     } else if (this.cursors.down.isDown) {
-      input.y += 1;
-      this.lastDirection = "down";
+      direction = "down";
+      moving = true;
     }
 
-    const isMoving = input.lengthSq() > 0;
-    if (isMoving) {
-      input.normalize();
-    }
+    this.lastDirection = direction;
+    this.localAvatar.state.direction = direction;
+    this.localAvatar.sprite.setFillStyle(moving ? 0xfb923c : 0xf59e0b, 1);
+    this.localAvatar.label.setText(`${this.nickname}${moving ? " · move" : ""}`);
 
-    const distance = (PLAYER_SPEED * delta) / 1000;
-    const nextX = this.localAvatar.root.x + input.x * distance;
-    const nextY = this.localAvatar.root.y + input.y * distance;
-
-    const resolved = this.resolveCollision(nextX, nextY, this.localAvatar.root.x, this.localAvatar.root.y);
-    this.localAvatar.root.setPosition(resolved.x, resolved.y);
-    this.localAvatar.state.pixelX = resolved.x;
-    this.localAvatar.state.pixelY = resolved.y;
-    this.localAvatar.state.tileX = Math.floor(resolved.x / TILE_SIZE);
-    this.localAvatar.state.tileY = Math.floor(resolved.y / TILE_SIZE);
-    this.localAvatar.state.direction = this.lastDirection;
-    this.localAvatar.state.moving = isMoving;
-
-    this.localAvatar.sprite.setFillStyle(isMoving ? 0xfb923c : 0xf59e0b, 1);
-    this.localAvatar.label.setText(`${this.nickname}${isMoving ? " · move" : ""}`);
-
-    const now = this.time.now;
-    const changedEnough =
-      Math.abs(previousX - resolved.x) > 1 ||
-      Math.abs(previousY - resolved.y) > 1 ||
-      previousMoving !== isMoving;
-
-    if (!changedEnough && now - this.lastSent < 100) {
+    if (this.lastInputState.direction === direction && this.lastInputState.moving === moving) {
       return;
     }
 
-    this.localAvatar.targetX = resolved.x;
-    this.localAvatar.targetY = resolved.y;
-    this.lastSent = now;
     this.sequence += 1;
-
-    const payload: MovePayload = {
-      x: resolved.x,
-      y: resolved.y,
-      direction: this.lastDirection,
-      moving: isMoving,
+    const payload: PlayerInputPayload = {
+      direction,
+      moving,
       seq: this.sequence
     };
-
-    this.socket.emit("player:move", payload);
+    this.lastInputState = payload;
+    this.socket.emit("player:input", payload);
   }
 
-  private updateRemotePlayers(delta: number) {
+  private updateAllPlayers(delta: number) {
     const easing = Math.min(1, (delta / 1000) * 10);
+
+    if (this.localAvatar) {
+      const localX = Phaser.Math.Linear(this.localAvatar.root.x, this.localAvatar.targetX, easing);
+      const localY = Phaser.Math.Linear(this.localAvatar.root.y, this.localAvatar.targetY, easing);
+      this.localAvatar.root.setPosition(localX, localY);
+    }
 
     this.remotePlayers.forEach((avatar) => {
       const x = Phaser.Math.Linear(avatar.root.x, avatar.targetX, easing);
@@ -337,26 +316,6 @@ export class MultiplayerScene extends Phaser.Scene {
     };
   }
 
-  private resolveCollision(nextX: number, nextY: number, currentX: number, currentY: number) {
-    const half = PLAYER_SIZE / 2;
-    const candidateX = this.canOccupy(nextX, currentY, half) ? nextX : currentX;
-    const candidateY = this.canOccupy(candidateX, nextY, half) ? nextY : currentY;
-
-    return {
-      x: Phaser.Math.Clamp(candidateX, half, MAP_WIDTH * TILE_SIZE - half),
-      y: Phaser.Math.Clamp(candidateY, half, MAP_HEIGHT * TILE_SIZE - half)
-    };
-  }
-
-  private canOccupy(x: number, y: number, half: number): boolean {
-    return !(
-      isBlockedAt(x - half, y - half) ||
-      isBlockedAt(x + half, y - half) ||
-      isBlockedAt(x - half, y + half) ||
-      isBlockedAt(x + half, y + half)
-    );
-  }
-
   private syncPlayerCount() {
     const localCount = this.localAvatar ? 1 : 0;
     this.onPlayerCountChange(localCount + this.remotePlayers.size);
@@ -379,18 +338,16 @@ export class MultiplayerScene extends Phaser.Scene {
     this.localAvatar.state.moving = false;
     this.localAvatar.sprite.setFillStyle(0xf59e0b, 1);
     this.localAvatar.label.setText(this.nickname);
-    this.lastSent = this.time.now;
     this.sequence += 1;
 
-    const payload: MovePayload = {
-      x: this.localAvatar.state.pixelX,
-      y: this.localAvatar.state.pixelY,
+    const payload: PlayerInputPayload = {
       direction: this.lastDirection,
       moving: false,
       seq: this.sequence
     };
 
-    this.socket.emit("player:move", payload);
+    this.lastInputState = payload;
+    this.socket.emit("player:input", payload);
   }
 
   private cleanupScene() {

@@ -7,6 +7,7 @@ import {
   type BombState,
   type FlameState,
   type MatchState,
+  type PlayerInputState,
   type PlayerState,
   type TileType,
   tileToPixelCenter
@@ -17,6 +18,7 @@ export type GameState = {
   mapId: string;
   grid: TileType[][];
   players: Map<string, PlayerState>;
+  playerInputs: Map<string, PlayerInputState>;
   bombs: Map<string, BombState>;
   flames: FlameState[];
   match: MatchState;
@@ -28,6 +30,7 @@ export function createInitialGameState(): GameState {
     mapId: MAP_ID,
     grid: createRoundGrid(),
     players: new Map<string, PlayerState>(),
+    playerInputs: new Map<string, PlayerInputState>(),
     bombs: new Map<string, BombState>(),
     flames: [],
     match: createWaitingMatchState(),
