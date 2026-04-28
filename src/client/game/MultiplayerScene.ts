@@ -259,6 +259,11 @@ export class MultiplayerScene extends Phaser.Scene {
       return;
     }
 
+    if (!this.localAvatar.state.alive) {
+      this.stopLocalMovement();
+      return;
+    }
+
     if (this.placeBombKey && Phaser.Input.Keyboard.JustDown(this.placeBombKey)) {
       this.socket.emit("bomb:place");
     }
@@ -308,14 +313,16 @@ export class MultiplayerScene extends Phaser.Scene {
       const localX = Phaser.Math.Linear(this.localAvatar.root.x, this.localAvatar.targetX, easing);
       const localY = Phaser.Math.Linear(this.localAvatar.root.y, this.localAvatar.targetY, easing);
       this.localAvatar.root.setPosition(localX, localY);
+      this.localAvatar.sprite.setFillStyle(this.localAvatar.state.alive ? 0xf59e0b : 0x7f1d1d, 1);
+      this.localAvatar.label.setText(this.formatAvatarLabel(this.localAvatar.state, true));
     }
 
     this.remotePlayers.forEach((avatar) => {
       const x = Phaser.Math.Linear(avatar.root.x, avatar.targetX, easing);
       const y = Phaser.Math.Linear(avatar.root.y, avatar.targetY, easing);
       avatar.root.setPosition(x, y);
-      avatar.sprite.setFillStyle(avatar.state.moving ? 0x7dd3fc : 0x38bdf8, 1);
-      avatar.label.setText(`${avatar.state.nickname}${avatar.state.moving ? " · move" : ""}`);
+      avatar.sprite.setFillStyle(avatar.state.alive ? (avatar.state.moving ? 0x7dd3fc : 0x38bdf8) : 0x334155, 1);
+      avatar.label.setText(this.formatAvatarLabel(avatar.state, false));
     });
   }
 
@@ -439,6 +446,22 @@ export class MultiplayerScene extends Phaser.Scene {
 
     this.lastInputState = payload;
     this.socket.emit("player:input", payload);
+  }
+
+  private formatAvatarLabel(player: PlayerState, isLocal: boolean) {
+    if (!player.alive) {
+      return `${player.nickname} · KO`;
+    }
+
+    if (isLocal && player.moving) {
+      return `${player.nickname} · move`;
+    }
+
+    if (!isLocal && player.moving) {
+      return `${player.nickname} · move`;
+    }
+
+    return player.nickname;
   }
 
   private cleanupScene() {

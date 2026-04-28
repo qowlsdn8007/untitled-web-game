@@ -47,6 +47,11 @@ export function clearPendingStart(state: GameState) {
     clearTimeout(state.pendingStartTimer);
     state.pendingStartTimer = null;
   }
+
+  if (state.pendingRestartTimer) {
+    clearTimeout(state.pendingRestartTimer);
+    state.pendingRestartTimer = null;
+  }
 }
 
 export function emitMatchState(

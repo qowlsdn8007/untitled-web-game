@@ -3,6 +3,8 @@ import cors from "cors";
 import { createServer } from "node:http";
 import { Server } from "socket.io";
 import {
+  MIN_PLAYERS_TO_START,
+  ROUND_RESTART_DELAY_MS,
   SERVER_TICK_MS,
   type BombPlacedPayload,
   type ClientToServerEvents,
@@ -15,8 +17,18 @@ import {
 import { canPlaceBomb, createBomb } from "./game/bombs.js";
 import { resolveExplosions } from "./game/explosions.js";
 import { clearPendingStart, syncMatchLifecycle } from "./game/match.js";
-import { createInitialGameState, createPlayerState, createWorldSnapshot } from "./game/state.js";
+import { emitMatchState } from "./game/match.js";
+import {
+  createFinishedMatchState,
+  createInitialGameState,
+  createPlayerState,
+  createRunningMatchState,
+  createWaitingMatchState,
+  createWorldSnapshot,
+  resetRoundState
+} from "./game/state.js";
 import { stepPlayerMovement } from "./game/movement.js";
+import { applyFlameDamage, getRoundOutcome } from "./game/round.js";
 
 type InterServerEvents = Record<string, never>;
 type SocketData = {
@@ -133,6 +145,16 @@ const tickTimer = setInterval(() => {
   if (worldUpdate) {
     io.emit("world:updated", toWorldUpdatedPayload(worldUpdate));
   }
+
+  const defeatedPlayers = applyFlameDamage(gameState.players.values(), gameState.flames);
+  defeatedPlayers.forEach((player) => {
+    io.emit("player:updated", toPlayerUpdatedPayload(player));
+  });
+
+  const outcome = getRoundOutcome(gameState.players.values());
+  if (outcome && !gameState.pendingRestartTimer) {
+    finishRound(outcome.winnerId);
+  }
 }, SERVER_TICK_MS);
 
 const port = Number(process.env.PORT ?? 3001);
@@ -188,6 +210,43 @@ function toWorldUpdatedPayload(payload: WorldUpdatedPayload): WorldUpdatedPayloa
     flames: payload.flames.map((flame) => ({ ...flame })),
     playerBombs: payload.playerBombs.map((playerBomb) => ({ ...playerBomb }))
   };
+}
+
+function finishRound(winnerId: string | null) {
+  gameState.match = createFinishedMatchState(gameState.match.round, winnerId, Date.now());
+  emitMatchState(io, gameState);
+
+  gameState.pendingRestartTimer = setTimeout(() => {
+    gameState.pendingRestartTimer = null;
+    resetRoundState(gameState);
+
+    if (gameState.players.size < MIN_PLAYERS_TO_START) {
+      gameState.match = createWaitingMatchState(gameState.match.round + 1);
+    } else {
+      gameState.match = createRunningMatchState(gameState.match.round + 1, Date.now());
+    }
+
+    emitMatchState(io, gameState);
+    emitWorldState();
+    gameState.players.forEach((player) => {
+      io.emit("player:updated", toPlayerUpdatedPayload(player));
+    });
+  }, ROUND_RESTART_DELAY_MS);
+}
+
+function emitWorldState() {
+  io.emit(
+    "world:updated",
+    toWorldUpdatedPayload({
+      grid: gameState.grid,
+      bombs: [...gameState.bombs.values()],
+      flames: gameState.flames,
+      playerBombs: [...gameState.players.values()].map((player) => ({
+        id: player.id,
+        activeBombs: player.activeBombs
+      }))
+    })
+  );
 }
 
 function didPlayerChange(previous: import("../shared/protocol.js").PlayerState, next: import("../shared/protocol.js").PlayerState): boolean {

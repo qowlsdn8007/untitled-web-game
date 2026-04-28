@@ -23,6 +23,7 @@ export type GameState = {
   flames: FlameState[];
   match: MatchState;
   pendingStartTimer: NodeJS.Timeout | null;
+  pendingRestartTimer: NodeJS.Timeout | null;
 };
 
 export function createInitialGameState(): GameState {
@@ -34,7 +35,8 @@ export function createInitialGameState(): GameState {
     bombs: new Map<string, BombState>(),
     flames: [],
     match: createWaitingMatchState(),
-    pendingStartTimer: null
+    pendingStartTimer: null,
+    pendingRestartTimer: null
   };
 }
 
@@ -91,10 +93,22 @@ export function createRunningMatchState(round: number, startedAt: number): Match
   };
 }
 
+export function createFinishedMatchState(round: number, winnerId: string | null, finishedAt: number): MatchState {
+  return {
+    status: "finished",
+    round,
+    winnerId,
+    startedAt: null,
+    finishedAt,
+    countdownStartedAt: null
+  };
+}
+
 export function resetRoundState(state: GameState): void {
   state.grid = createRoundGrid();
   state.bombs.clear();
   state.flames = [];
+  state.playerInputs.clear();
 
   const players = [...state.players.values()];
   players.forEach((player, index) => {
