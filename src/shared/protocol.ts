@@ -72,6 +72,18 @@ export type BombPlacedPayload = {
   activeBombs: number;
 };
 
+export type PlayerBombInventoryPayload = {
+  id: string;
+  activeBombs: number;
+};
+
+export type WorldUpdatedPayload = {
+  grid: TileType[][];
+  bombs: BombState[];
+  flames: FlameState[];
+  playerBombs: PlayerBombInventoryPayload[];
+};
+
 export type MatchState = {
   status: MatchStatus;
   round: number;
@@ -139,6 +151,7 @@ export type PlayerLeftPayload = {
 
 export type ServerToClientEvents = {
   "world:init": (payload: WorldInitPayload) => void;
+  "world:updated": (payload: WorldUpdatedPayload) => void;
   "match:state": (payload: MatchStatePayload) => void;
   "player:joined": (payload: PlayerState) => void;
   "player:updated": (payload: PlayerUpdatedPayload) => void;

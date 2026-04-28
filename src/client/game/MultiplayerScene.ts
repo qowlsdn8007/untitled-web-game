@@ -9,9 +9,12 @@ import {
   type BombPlacedPayload,
   type BombState,
   type Direction,
+  type FlameState,
   type PlayerInputPayload,
   type PlayerUpdatedPayload,
   type PlayerState,
+  type TileType,
+  type WorldUpdatedPayload,
   type WorldInitPayload
 } from "../../shared/protocol";
 import { drawMap } from "./map";
@@ -40,6 +43,11 @@ type BombView = {
   state: BombState;
 };
 
+type FlameView = {
+  root: Phaser.GameObjects.Rectangle;
+  state: FlameState;
+};
+
 const PLAYER_SIZE = 28;
 const SELF_RECONCILE_IGNORE_DISTANCE = 12;
 const SELF_RECONCILE_SNAP_DISTANCE = 96;
@@ -52,9 +60,13 @@ export class MultiplayerScene extends Phaser.Scene {
   private readonly onPlayerCountChange: SceneOptions["onPlayerCountChange"];
   private readonly remotePlayers = new Map<string, Avatar>();
   private readonly bombs = new Map<string, BombView>();
+  private readonly flames = new Map<string, FlameView>();
   private cursors?: Phaser.Types.Input.Keyboard.CursorKeys;
   private placeBombKey?: Phaser.Input.Keyboard.Key;
   private mapGraphics?: Phaser.GameObjects.Graphics;
+  private currentGrid: TileType[][] = Array.from({ length: MAP_HEIGHT }, () =>
+    Array.from({ length: MAP_WIDTH }, () => "empty" as TileType)
+  );
   private selfId: string | null = null;
   private localAvatar?: Avatar;
   private lastDirection: Direction = "down";
@@ -88,7 +100,7 @@ export class MultiplayerScene extends Phaser.Scene {
 
   create() {
     this.mapGraphics = this.add.graphics();
-    drawMap(this.mapGraphics);
+    drawMap(this.mapGraphics, this.currentGrid);
 
     this.cameras.main.setBounds(0, 0, MAP_WIDTH * TILE_SIZE, MAP_HEIGHT * TILE_SIZE);
     this.physics.world.setBounds(0, 0, MAP_WIDTH * TILE_SIZE, MAP_HEIGHT * TILE_SIZE);
@@ -117,6 +129,10 @@ export class MultiplayerScene extends Phaser.Scene {
 
     this.socket.on("world:init", (payload) => {
       this.handleWorldInit(payload);
+    });
+
+    this.socket.on("world:updated", (payload) => {
+      this.handleWorldUpdated(payload);
     });
 
     this.socket.on("player:joined", (payload) => {
@@ -158,9 +174,15 @@ export class MultiplayerScene extends Phaser.Scene {
       return;
     }
 
+    this.currentGrid = payload.grid.map((row) => [...row]);
+    if (this.mapGraphics) {
+      drawMap(this.mapGraphics, this.currentGrid);
+    }
+
     this.remotePlayers.forEach((avatar) => avatar.root.destroy(true));
     this.remotePlayers.clear();
     this.clearBombs();
+    this.clearFlames();
     this.localAvatar?.root.destroy(true);
     this.localAvatar = undefined;
 
@@ -177,6 +199,10 @@ export class MultiplayerScene extends Phaser.Scene {
 
     payload.bombs.forEach((bomb) => {
       this.bombs.set(bomb.id, this.createBombView(bomb));
+    });
+
+    payload.flames.forEach((flame) => {
+      this.flames.set(this.toTileKey(flame.tileX, flame.tileY), this.createFlameView(flame));
     });
 
     if (!this.localAvatar) {
@@ -330,6 +356,28 @@ export class MultiplayerScene extends Phaser.Scene {
     }
   }
 
+  private handleWorldUpdated(payload: WorldUpdatedPayload) {
+    this.currentGrid = payload.grid.map((row) => [...row]);
+    if (this.mapGraphics) {
+      drawMap(this.mapGraphics, this.currentGrid);
+    }
+
+    this.syncBombViews(payload.bombs);
+    this.syncFlameViews(payload.flames);
+
+    payload.playerBombs.forEach((playerBomb) => {
+      if (playerBomb.id === this.selfId && this.localAvatar) {
+        this.localAvatar.state.activeBombs = playerBomb.activeBombs;
+        return;
+      }
+
+      const avatar = this.remotePlayers.get(playerBomb.id);
+      if (avatar) {
+        avatar.state.activeBombs = playerBomb.activeBombs;
+      }
+    });
+  }
+
   private reconcileLocalAvatar(payload: PlayerUpdatedPayload) {
     if (!this.localAvatar) {
       return;
@@ -397,6 +445,7 @@ export class MultiplayerScene extends Phaser.Scene {
     window.removeEventListener("blur", this.handleWindowBlur);
     document.removeEventListener("visibilitychange", this.handleVisibilityChange);
     this.clearBombs();
+    this.clearFlames();
   }
 
   private createBombView(bomb: BombState): BombView {
@@ -420,5 +469,75 @@ export class MultiplayerScene extends Phaser.Scene {
   private clearBombs() {
     this.bombs.forEach((bomb) => bomb.root.destroy(true));
     this.bombs.clear();
+  }
+
+  private createFlameView(flame: FlameState): FlameView {
+    const root = this.add.rectangle(
+      flame.tileX * TILE_SIZE + TILE_SIZE / 2,
+      flame.tileY * TILE_SIZE + TILE_SIZE / 2,
+      TILE_SIZE - 10,
+      TILE_SIZE - 10,
+      0xf97316,
+      0.8
+    );
+    root.setStrokeStyle(3, 0xfef08a, 1);
+    root.setDepth(9);
+
+    return {
+      root,
+      state: { ...flame }
+    };
+  }
+
+  private clearFlames() {
+    this.flames.forEach((flame) => flame.root.destroy(true));
+    this.flames.clear();
+  }
+
+  private syncBombViews(bombs: BombState[]) {
+    const nextBombIds = new Set(bombs.map((bomb) => bomb.id));
+
+    this.bombs.forEach((bomb, bombId) => {
+      if (!nextBombIds.has(bombId)) {
+        bomb.root.destroy(true);
+        this.bombs.delete(bombId);
+      }
+    });
+
+    bombs.forEach((bomb) => {
+      const existing = this.bombs.get(bomb.id);
+      if (existing) {
+        existing.state = { ...bomb };
+        return;
+      }
+
+      this.bombs.set(bomb.id, this.createBombView(bomb));
+    });
+  }
+
+  private syncFlameViews(flames: FlameState[]) {
+    const nextFlameKeys = new Set(flames.map((flame) => this.toTileKey(flame.tileX, flame.tileY)));
+
+    this.flames.forEach((flame, flameKey) => {
+      if (!nextFlameKeys.has(flameKey)) {
+        flame.root.destroy(true);
+        this.flames.delete(flameKey);
+      }
+    });
+
+    flames.forEach((flame) => {
+      const flameKey = this.toTileKey(flame.tileX, flame.tileY);
+      const existing = this.flames.get(flameKey);
+      if (existing) {
+        existing.state = { ...flame };
+        return;
+      }
+
+      this.flames.set(flameKey, this.createFlameView(flame));
+    });
+  }
+
+  private toTileKey(tileX: number, tileY: number) {
+    return `${tileX},${tileY}`;
   }
 }

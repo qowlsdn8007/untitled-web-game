@@ -9,9 +9,11 @@ import {
   type JoinPayload,
   type PlayerInputPayload,
   type PlayerUpdatedPayload,
-  type ServerToClientEvents
+  type ServerToClientEvents,
+  type WorldUpdatedPayload
 } from "../shared/protocol.js";
 import { canPlaceBomb, createBomb } from "./game/bombs.js";
+import { resolveExplosions } from "./game/explosions.js";
 import { clearPendingStart, syncMatchLifecycle } from "./game/match.js";
 import { createInitialGameState, createPlayerState, createWorldSnapshot } from "./game/state.js";
 import { stepPlayerMovement } from "./game/movement.js";
@@ -126,6 +128,11 @@ const tickTimer = setInterval(() => {
     gameState.players.set(playerId, nextState);
     io.emit("player:updated", toPlayerUpdatedPayload(nextState));
   });
+
+  const worldUpdate = resolveExplosions(gameState, Date.now());
+  if (worldUpdate) {
+    io.emit("world:updated", toWorldUpdatedPayload(worldUpdate));
+  }
 }, SERVER_TICK_MS);
 
 const port = Number(process.env.PORT ?? 3001);
@@ -171,6 +178,15 @@ function toBombPlacedPayload(
     bomb: { ...bomb },
     playerId: player.id,
     activeBombs: player.activeBombs
+  };
+}
+
+function toWorldUpdatedPayload(payload: WorldUpdatedPayload): WorldUpdatedPayload {
+  return {
+    grid: payload.grid.map((row) => [...row]),
+    bombs: payload.bombs.map((bomb) => ({ ...bomb })),
+    flames: payload.flames.map((flame) => ({ ...flame })),
+    playerBombs: payload.playerBombs.map((playerBomb) => ({ ...playerBomb }))
   };
 }
 
