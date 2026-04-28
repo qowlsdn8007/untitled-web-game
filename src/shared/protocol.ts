@@ -110,6 +110,7 @@ export type MatchState = {
 
 export type JoinPayload = {
   nickname: string;
+  roomId: string;
 };
 
 export type MovePayload = {
@@ -134,6 +135,7 @@ export type PlayerInputState = {
 
 export type WorldInitPayload = {
   selfId: string;
+  roomId: string;
   mapId: string;
   grid: TileType[][];
   players: PlayerState[];
@@ -144,6 +146,7 @@ export type WorldInitPayload = {
 };
 
 export type MatchStatePayload = {
+  roomId: string;
   match: MatchState;
   playerCount: number;
 };
@@ -157,8 +160,10 @@ export type PlayerUpdatedPayload = {
   direction: Direction;
   moving: boolean;
   alive: boolean;
+  maxBombs: number;
   activeBombs: number;
   flameRange: number;
+  moveSpeed: number;
 };
 
 export type PlayerLeftPayload = {

@@ -34,6 +34,7 @@ import { applyFlameDamage, getRoundOutcome } from "./game/round.js";
 type InterServerEvents = Record<string, never>;
 type SocketData = {
   playerId?: string;
+  roomId?: string;
 };
 
 const app = express();
@@ -43,15 +44,17 @@ app.use(
   })
 );
 
-const gameState = createInitialGameState();
+const roomStates = new Map<string, ReturnType<typeof createInitialGameState>>();
 
 app.get("/health", (_req, res) => {
+  const rooms = [...roomStates.values()];
+  const totalPlayers = rooms.reduce((count, roomState) => count + roomState.players.size, 0);
+
   res.json({
     ok: true,
-    players: gameState.players.size,
-    mapId: gameState.mapId,
-    matchStatus: gameState.match.status,
-    round: gameState.match.round
+    players: totalPlayers,
+    rooms: roomStates.size,
+    mapId: rooms[0]?.mapId ?? null
   });
 });
 
@@ -64,107 +67,140 @@ const io = new Server<ClientToServerEvents, ServerToClientEvents, InterServerEve
 });
 
 io.on("connection", (socket) => {
-  socket.on("player:join", ({ nickname }: JoinPayload) => {
-    const player = createPlayerState(socket.id, sanitizeNickname(nickname), gameState.players.size);
+  socket.on("player:join", ({ nickname, roomId }: JoinPayload) => {
+    const normalizedRoomId = normalizeRoomId(roomId);
+    const roomState = getOrCreateRoomState(normalizedRoomId);
+    const player = createPlayerState(socket.id, sanitizeNickname(nickname), roomState.players.size);
 
+    socket.join(normalizedRoomId);
     socket.data.playerId = player.id;
-    gameState.players.set(player.id, player);
+    socket.data.roomId = normalizedRoomId;
+    roomState.players.set(player.id, player);
 
-    socket.emit("world:init", createWorldSnapshot(gameState, player.id));
-    socket.broadcast.emit("player:joined", player);
+    socket.emit("world:init", createWorldSnapshot(roomState, player.id, normalizedRoomId));
+    socket.to(normalizedRoomId).emit("player:joined", player);
 
-    syncMatchLifecycle(io, gameState);
+    syncMatchLifecycle(io, roomState, normalizedRoomId);
   });
 
   socket.on("player:input", (payload: PlayerInputPayload) => {
     const playerId = socket.data.playerId;
+    const roomId = socket.data.roomId;
     if (!playerId) {
       return;
     }
 
-    if (!gameState.players.has(playerId)) {
+    if (!roomId) {
       return;
     }
 
-    gameState.playerInputs.set(playerId, payload);
+    const roomState = roomStates.get(roomId);
+    if (!roomState || !roomState.players.has(playerId)) {
+      return;
+    }
+
+    roomState.playerInputs.set(playerId, payload);
   });
 
   socket.on("bomb:place", () => {
     const playerId = socket.data.playerId;
+    const roomId = socket.data.roomId;
     if (!playerId) {
       return;
     }
 
-    const player = gameState.players.get(playerId);
+    if (!roomId) {
+      return;
+    }
+
+    const roomState = roomStates.get(roomId);
+    if (!roomState) {
+      return;
+    }
+
+    const player = roomState.players.get(playerId);
     if (!player) {
       return;
     }
 
-    if (!canPlaceBomb(player, gameState.grid, gameState.bombs.values(), gameState.match.status)) {
+    if (!canPlaceBomb(player, roomState.grid, roomState.bombs.values(), roomState.match.status)) {
       return;
     }
 
     const bomb = createBomb(playerId, player, Date.now());
-    gameState.bombs.set(bomb.id, bomb);
+    roomState.bombs.set(bomb.id, bomb);
     player.activeBombs += 1;
 
-    io.emit("bomb:placed", toBombPlacedPayload(bomb, player));
-    io.emit("player:updated", toPlayerUpdatedPayload(player));
+    io.to(roomId).emit("bomb:placed", toBombPlacedPayload(bomb, player));
+    io.to(roomId).emit("player:updated", toPlayerUpdatedPayload(player));
   });
 
   socket.on("disconnect", () => {
     const playerId = socket.data.playerId;
+    const roomId = socket.data.roomId;
     if (!playerId) {
       return;
     }
 
-    gameState.players.delete(playerId);
-    gameState.playerInputs.delete(playerId);
-    socket.broadcast.emit("player:left", { id: playerId });
-    syncMatchLifecycle(io, gameState);
+    if (!roomId) {
+      return;
+    }
+
+    const roomState = roomStates.get(roomId);
+    if (!roomState) {
+      return;
+    }
+
+    roomState.players.delete(playerId);
+    roomState.playerInputs.delete(playerId);
+    socket.to(roomId).emit("player:left", { id: playerId });
+    syncMatchLifecycle(io, roomState, roomId);
+    cleanupRoomIfEmpty(roomId);
   });
 });
 
 const tickTimer = setInterval(() => {
-  if (gameState.match.status !== "running") {
-    return;
-  }
-
-  gameState.players.forEach((player, playerId) => {
-    const input = gameState.playerInputs.get(playerId);
-    const nextState = stepPlayerMovement(player, input, gameState.grid, gameState.bombs.values(), SERVER_TICK_MS);
-
-    if (!didPlayerChange(player, nextState)) {
+  roomStates.forEach((roomState, roomId) => {
+    if (roomState.match.status !== "running") {
       return;
     }
 
-    gameState.players.set(playerId, nextState);
-    io.emit("player:updated", toPlayerUpdatedPayload(nextState));
+    roomState.players.forEach((player, playerId) => {
+      const input = roomState.playerInputs.get(playerId);
+      const nextState = stepPlayerMovement(player, input, roomState.grid, roomState.bombs.values(), SERVER_TICK_MS);
+
+      if (!didPlayerChange(player, nextState)) {
+        return;
+      }
+
+      roomState.players.set(playerId, nextState);
+      io.to(roomId).emit("player:updated", toPlayerUpdatedPayload(nextState));
+    });
+
+    const collectedPowerUps = collectPowerUps(roomState.players.values(), roomState.powerUps);
+    collectedPowerUps.updatedPlayers.forEach((player) => {
+      io.to(roomId).emit("player:updated", toPlayerUpdatedPayload(player));
+    });
+
+    const worldUpdate = resolveExplosions(roomState, Date.now());
+    if (worldUpdate) {
+      io.to(roomId).emit("world:updated", toWorldUpdatedPayload(worldUpdate));
+    }
+
+    if (collectedPowerUps.collectedPowerUps.length > 0) {
+      emitWorldState(roomId, roomState);
+    }
+
+    const defeatedPlayers = applyFlameDamage(roomState.players.values(), roomState.flames);
+    defeatedPlayers.forEach((player) => {
+      io.to(roomId).emit("player:updated", toPlayerUpdatedPayload(player));
+    });
+
+    const outcome = getRoundOutcome(roomState.players.values());
+    if (outcome && !roomState.pendingRestartTimer) {
+      finishRound(roomId, roomState, outcome.winnerId);
+    }
   });
-
-  const collectedPowerUps = collectPowerUps(gameState.players.values(), gameState.powerUps);
-  collectedPowerUps.updatedPlayers.forEach((player) => {
-    io.emit("player:updated", toPlayerUpdatedPayload(player));
-  });
-
-  const worldUpdate = resolveExplosions(gameState, Date.now());
-  if (worldUpdate) {
-    io.emit("world:updated", toWorldUpdatedPayload(worldUpdate));
-  }
-
-  if (collectedPowerUps.collectedPowerUps.length > 0) {
-    emitWorldState();
-  }
-
-  const defeatedPlayers = applyFlameDamage(gameState.players.values(), gameState.flames);
-  defeatedPlayers.forEach((player) => {
-    io.emit("player:updated", toPlayerUpdatedPayload(player));
-  });
-
-  const outcome = getRoundOutcome(gameState.players.values());
-  if (outcome && !gameState.pendingRestartTimer) {
-    finishRound(outcome.winnerId);
-  }
 }, SERVER_TICK_MS);
 
 const port = Number(process.env.PORT ?? 3001);
@@ -173,12 +209,16 @@ server.listen(port, () => {
 });
 
 process.on("SIGTERM", () => {
-  clearPendingStart(gameState);
+  roomStates.forEach((roomState) => {
+    clearPendingStart(roomState);
+  });
   clearInterval(tickTimer);
 });
 
 process.on("SIGINT", () => {
-  clearPendingStart(gameState);
+  roomStates.forEach((roomState) => {
+    clearPendingStart(roomState);
+  });
   clearInterval(tickTimer);
 });
 
@@ -197,8 +237,10 @@ function toPlayerUpdatedPayload(player: import("../shared/protocol.js").PlayerSt
     direction: player.direction,
     moving: player.moving,
     alive: player.alive,
+    maxBombs: player.maxBombs,
     activeBombs: player.activeBombs,
-    flameRange: player.flameRange
+    flameRange: player.flameRange,
+    moveSpeed: player.moveSpeed
   };
 }
 
@@ -223,37 +265,37 @@ function toWorldUpdatedPayload(payload: WorldUpdatedPayload): WorldUpdatedPayloa
   };
 }
 
-function finishRound(winnerId: string | null) {
-  gameState.match = createFinishedMatchState(gameState.match.round, winnerId, Date.now());
-  emitMatchState(io, gameState);
+function finishRound(roomId: string, roomState: ReturnType<typeof createInitialGameState>, winnerId: string | null) {
+  roomState.match = createFinishedMatchState(roomState.match.round, winnerId, Date.now());
+  emitMatchState(io, roomState, roomId);
 
-  gameState.pendingRestartTimer = setTimeout(() => {
-    gameState.pendingRestartTimer = null;
-    resetRoundState(gameState);
+  roomState.pendingRestartTimer = setTimeout(() => {
+    roomState.pendingRestartTimer = null;
+    resetRoundState(roomState);
 
-    if (gameState.players.size < MIN_PLAYERS_TO_START) {
-      gameState.match = createWaitingMatchState(gameState.match.round + 1);
+    if (roomState.players.size < MIN_PLAYERS_TO_START) {
+      roomState.match = createWaitingMatchState(roomState.match.round + 1);
     } else {
-      gameState.match = createRunningMatchState(gameState.match.round + 1, Date.now());
+      roomState.match = createRunningMatchState(roomState.match.round + 1, Date.now());
     }
 
-    emitMatchState(io, gameState);
-    emitWorldState();
-    gameState.players.forEach((player) => {
-      io.emit("player:updated", toPlayerUpdatedPayload(player));
+    emitMatchState(io, roomState, roomId);
+    emitWorldState(roomId, roomState);
+    roomState.players.forEach((player) => {
+      io.to(roomId).emit("player:updated", toPlayerUpdatedPayload(player));
     });
   }, ROUND_RESTART_DELAY_MS);
 }
 
-function emitWorldState() {
-  io.emit(
+function emitWorldState(roomId: string, roomState: ReturnType<typeof createInitialGameState>) {
+  io.to(roomId).emit(
     "world:updated",
     toWorldUpdatedPayload({
-      grid: gameState.grid,
-      bombs: [...gameState.bombs.values()],
-      flames: gameState.flames,
-      powerUps: [...gameState.powerUps.values()],
-      playerBombs: [...gameState.players.values()].map((player) => ({
+      grid: roomState.grid,
+      bombs: [...roomState.bombs.values()],
+      flames: roomState.flames,
+      powerUps: [...roomState.powerUps.values()],
+      playerBombs: [...roomState.players.values()].map((player) => ({
         id: player.id,
         activeBombs: player.activeBombs
       }))
@@ -270,4 +312,30 @@ function didPlayerChange(previous: import("../shared/protocol.js").PlayerState, 
     previous.direction !== next.direction ||
     previous.moving !== next.moving
   );
+}
+
+function getOrCreateRoomState(roomId: string) {
+  const existing = roomStates.get(roomId);
+  if (existing) {
+    return existing;
+  }
+
+  const next = createInitialGameState();
+  roomStates.set(roomId, next);
+  return next;
+}
+
+function cleanupRoomIfEmpty(roomId: string) {
+  const roomState = roomStates.get(roomId);
+  if (!roomState || roomState.players.size > 0) {
+    return;
+  }
+
+  clearPendingStart(roomState);
+  roomStates.delete(roomId);
+}
+
+function normalizeRoomId(rawRoomId: string) {
+  const trimmed = rawRoomId.trim().toLowerCase().slice(0, 24);
+  return trimmed.length > 0 ? trimmed : "public-1";
 }

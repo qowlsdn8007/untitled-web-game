@@ -24,6 +24,7 @@ import type { GameSocket } from "../network/gameSocket";
 type SceneOptions = {
   socket: GameSocket;
   nickname: string;
+  roomId: string;
   onConnectionChange: (connected: boolean) => void;
   onPlayerCountChange: (count: number) => void;
 };
@@ -64,6 +65,7 @@ const SELF_RECONCILE_LERP_FACTOR = 0.35;
 export class MultiplayerScene extends Phaser.Scene {
   private readonly socket: GameSocket;
   private readonly nickname: string;
+  private readonly roomId: string;
   private readonly onConnectionChange: SceneOptions["onConnectionChange"];
   private readonly onPlayerCountChange: SceneOptions["onPlayerCountChange"];
   private readonly remotePlayers = new Map<string, Avatar>();
@@ -98,6 +100,7 @@ export class MultiplayerScene extends Phaser.Scene {
     super("MultiplayerScene");
     this.socket = options.socket;
     this.nickname = options.nickname;
+    this.roomId = options.roomId;
     this.onConnectionChange = options.onConnectionChange;
     this.onPlayerCountChange = options.onPlayerCountChange;
   }
@@ -129,7 +132,7 @@ export class MultiplayerScene extends Phaser.Scene {
   private bindSocketEvents() {
     this.socket.on("connect", () => {
       this.onConnectionChange(true);
-      this.socket.emit("player:join", { nickname: this.nickname });
+      this.socket.emit("player:join", { nickname: this.nickname, roomId: this.roomId });
     });
 
     this.socket.on("disconnect", () => {
@@ -610,6 +613,7 @@ export class MultiplayerScene extends Phaser.Scene {
 
     this.powerUps.forEach((powerUp, powerUpId) => {
       if (!nextPowerUpIds.has(powerUpId)) {
+        this.showPowerUpPickupEffect(powerUp);
         powerUp.root.destroy(true);
         this.powerUps.delete(powerUpId);
       }
@@ -628,6 +632,29 @@ export class MultiplayerScene extends Phaser.Scene {
 
   private toTileKey(tileX: number, tileY: number) {
     return `${tileX},${tileY}`;
+  }
+
+  private showPowerUpPickupEffect(powerUp: PowerUpView) {
+    const popup = this.add.text(powerUp.root.x, powerUp.root.y - 18, `+${getPowerUpVisual(powerUp.state.type).text}`, {
+      fontFamily: "Arial",
+      fontSize: "18px",
+      color: "#f8fafc",
+      stroke: "#020617",
+      strokeThickness: 4
+    });
+    popup.setOrigin(0.5, 0.5);
+    popup.setDepth(12);
+
+    this.tweens.add({
+      targets: popup,
+      y: popup.y - 18,
+      alpha: 0,
+      duration: 450,
+      ease: "Quad.easeOut",
+      onComplete: () => {
+        popup.destroy();
+      }
+    });
   }
 }
 

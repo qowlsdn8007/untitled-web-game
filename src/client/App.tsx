@@ -13,23 +13,26 @@ export default function App() {
   const socketRef = useRef<GameSocket | null>(null);
   const selfIdRef = useRef<string | null>(null);
   const [nickname, setNickname] = useState("");
+  const [roomCode, setRoomCode] = useState("public-1");
   const [submittedNickname, setSubmittedNickname] = useState("");
+  const [submittedRoomCode, setSubmittedRoomCode] = useState("");
   const [isConnected, setIsConnected] = useState(false);
   const [playerCount, setPlayerCount] = useState(0);
   const [status, setStatus] = useState("닉네임을 입력하고 맵에 입장하세요.");
   const [match, setMatch] = useState<MatchState | null>(null);
   const [selfPlayer, setSelfPlayer] = useState<PlayerState | null>(null);
+  const [currentRoomId, setCurrentRoomId] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!submittedNickname) {
+    if (!submittedNickname || !submittedRoomCode) {
       return;
     }
 
     setStatus(describeStatus(isConnected, match));
-  }, [isConnected, match, submittedNickname]);
+  }, [isConnected, match, submittedNickname, submittedRoomCode]);
 
   useEffect(() => {
-    if (!submittedNickname || !containerRef.current) {
+    if (!submittedNickname || !submittedRoomCode || !containerRef.current) {
       return;
     }
 
@@ -38,6 +41,7 @@ export default function App() {
 
     socket.on("world:init", (payload) => {
       selfIdRef.current = payload.selfId;
+      setCurrentRoomId(payload.roomId);
       setMatch(payload.match);
       setPlayerCount(payload.players.length);
       const nextSelfPlayer = payload.players.find((player) => player.id === payload.selfId) ?? null;
@@ -92,6 +96,7 @@ export default function App() {
     const scene = new MultiplayerScene({
       socket,
       nickname: submittedNickname,
+      roomId: submittedRoomCode,
       onConnectionChange: (connected) => {
         setIsConnected(connected);
       },
@@ -125,10 +130,11 @@ export default function App() {
       socket.disconnect();
       socketRef.current = null;
       selfIdRef.current = null;
+      setCurrentRoomId(null);
       game.destroy(true);
       gameRef.current = null;
     };
-  }, [submittedNickname]);
+  }, [submittedNickname, submittedRoomCode]);
 
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -140,6 +146,7 @@ export default function App() {
     }
 
     setSubmittedNickname(trimmed);
+    setSubmittedRoomCode(normalizeRoomCode(roomCode));
     setStatus("서버에 연결 중입니다...");
   };
 
@@ -165,6 +172,15 @@ export default function App() {
             onChange={(event) => setNickname(event.target.value)}
             disabled={Boolean(submittedNickname)}
           />
+          <label htmlFor="room-code">방 코드</label>
+          <input
+            id="room-code"
+            maxLength={24}
+            placeholder="예: public-1"
+            value={roomCode}
+            onChange={(event) => setRoomCode(event.target.value)}
+            disabled={Boolean(submittedNickname)}
+          />
           <button type="submit" disabled={Boolean(submittedNickname)}>
             {submittedNickname ? "입장 완료" : "맵 입장"}
           </button>
@@ -184,6 +200,10 @@ export default function App() {
             <dd>{playerCount}</dd>
           </div>
           <div>
+            <dt>방 코드</dt>
+            <dd>{currentRoomId ?? "-"}</dd>
+          </div>
+          <div>
             <dt>라운드</dt>
             <dd>{match?.round ?? "-"}</dd>
           </div>
@@ -193,7 +213,7 @@ export default function App() {
           </div>
           <div>
             <dt>생존 상태</dt>
-            <dd>{selfPlayer ? (selfPlayer.alive ? "alive" : "dead") : "-"}</dd>
+            <dd>{selfPlayer ? (selfPlayer.alive ? "alive" : "ko") : "-"}</dd>
           </div>
           <div>
             <dt>폭탄</dt>
@@ -201,11 +221,11 @@ export default function App() {
           </div>
           <div>
             <dt>화염 범위</dt>
-            <dd>{selfPlayer?.flameRange ?? "-"}</dd>
+            <dd>{selfPlayer ? `${selfPlayer.flameRange} tiles` : "-"}</dd>
           </div>
           <div>
             <dt>이동 속도</dt>
-            <dd>{selfPlayer?.moveSpeed ?? "-"}</dd>
+            <dd>{selfPlayer ? `${selfPlayer.moveSpeed}` : "-"}</dd>
           </div>
           <div>
             <dt>결과</dt>
@@ -217,6 +237,13 @@ export default function App() {
       <section className="game-panel">
         <div className="canvas-frame">
           <div ref={containerRef} className="game-canvas" />
+          {submittedNickname ? (
+            <div className="controls-banner">
+              <span>Move: Arrow Keys</span>
+              <span>Bomb: Space</span>
+              <span>Power-Ups: B / F / S</span>
+            </div>
+          ) : null}
           {!submittedNickname ? (
             <div className="canvas-overlay">닉네임을 입력하면 이곳에 멀티플레이 맵이 열립니다.</div>
           ) : null}
@@ -224,6 +251,11 @@ export default function App() {
       </section>
     </main>
   );
+}
+
+function normalizeRoomCode(value: string) {
+  const trimmed = value.trim().toLowerCase().slice(0, 24);
+  return trimmed.length > 0 ? trimmed : "public-1";
 }
 
 function formatMatchStatus(status: MatchState["status"] | undefined) {

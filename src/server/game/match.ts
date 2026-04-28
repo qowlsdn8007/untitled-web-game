@@ -14,7 +14,8 @@ type SocketData = {
 
 export function syncMatchLifecycle(
   io: Server<Record<string, never>, ServerToClientEvents, InterServerEvents, SocketData>,
-  state: GameState
+  state: GameState,
+  roomId: string
 ) {
   if (state.players.size < MIN_PLAYERS_TO_START) {
     clearPendingStart(state);
@@ -24,20 +25,20 @@ export function syncMatchLifecycle(
       countdownStartedAt: null,
       startedAt: null
     };
-    emitMatchState(io, state);
+    emitMatchState(io, state, roomId);
     return;
   }
 
   if (state.match.status === "waiting") {
     const countdownStartedAt = Date.now();
     state.match = createStartingMatchState(state.match.round, countdownStartedAt);
-    emitMatchState(io, state);
+    emitMatchState(io, state, roomId);
 
     state.pendingStartTimer = setTimeout(() => {
       resetRoundState(state);
       state.match = createRunningMatchState(state.match.round, Date.now());
       state.pendingStartTimer = null;
-      emitMatchState(io, state);
+      emitMatchState(io, state, roomId);
     }, MATCH_START_DELAY_MS);
   }
 }
@@ -56,13 +57,15 @@ export function clearPendingStart(state: GameState) {
 
 export function emitMatchState(
   io: Server<Record<string, never>, ServerToClientEvents, InterServerEvents, SocketData>,
-  state: GameState
+  state: GameState,
+  roomId: string
 ) {
-  io.emit("match:state", createMatchPayload(state));
+  io.to(roomId).emit("match:state", createMatchPayload(state, roomId));
 }
 
-function createMatchPayload(state: GameState): MatchStatePayload {
+function createMatchPayload(state: GameState, roomId: string): MatchStatePayload {
   return {
+    roomId,
     match: { ...state.match },
     playerCount: state.players.size
   };

@@ -131,9 +131,10 @@ export function resetRoundState(state: GameState): void {
   });
 }
 
-export function createWorldSnapshot(state: GameState, selfId: string) {
+export function createWorldSnapshot(state: GameState, selfId: string, roomId: string) {
   return {
     selfId,
+    roomId,
     mapId: state.mapId,
     grid: cloneGrid(state.grid),
     players: [...state.players.values()].map((player) => ({ ...player })),
