@@ -13,6 +13,7 @@ import {
   type PlayerInputPayload,
   type PlayerUpdatedPayload,
   type PlayerState,
+  type PowerUpState,
   type TileType,
   type WorldUpdatedPayload,
   type WorldInitPayload
@@ -48,6 +49,13 @@ type FlameView = {
   state: FlameState;
 };
 
+type PowerUpView = {
+  root: Phaser.GameObjects.Container;
+  marker: Phaser.GameObjects.Rectangle;
+  label: Phaser.GameObjects.Text;
+  state: PowerUpState;
+};
+
 const PLAYER_SIZE = 28;
 const SELF_RECONCILE_IGNORE_DISTANCE = 12;
 const SELF_RECONCILE_SNAP_DISTANCE = 96;
@@ -61,6 +69,7 @@ export class MultiplayerScene extends Phaser.Scene {
   private readonly remotePlayers = new Map<string, Avatar>();
   private readonly bombs = new Map<string, BombView>();
   private readonly flames = new Map<string, FlameView>();
+  private readonly powerUps = new Map<string, PowerUpView>();
   private cursors?: Phaser.Types.Input.Keyboard.CursorKeys;
   private placeBombKey?: Phaser.Input.Keyboard.Key;
   private mapGraphics?: Phaser.GameObjects.Graphics;
@@ -183,6 +192,7 @@ export class MultiplayerScene extends Phaser.Scene {
     this.remotePlayers.clear();
     this.clearBombs();
     this.clearFlames();
+    this.clearPowerUps();
     this.localAvatar?.root.destroy(true);
     this.localAvatar = undefined;
 
@@ -203,6 +213,10 @@ export class MultiplayerScene extends Phaser.Scene {
 
     payload.flames.forEach((flame) => {
       this.flames.set(this.toTileKey(flame.tileX, flame.tileY), this.createFlameView(flame));
+    });
+
+    payload.powerUps.forEach((powerUp) => {
+      this.powerUps.set(powerUp.id, this.createPowerUpView(powerUp));
     });
 
     if (!this.localAvatar) {
@@ -371,6 +385,7 @@ export class MultiplayerScene extends Phaser.Scene {
 
     this.syncBombViews(payload.bombs);
     this.syncFlameViews(payload.flames);
+    this.syncPowerUpViews(payload.powerUps);
 
     payload.playerBombs.forEach((playerBomb) => {
       if (playerBomb.id === this.selfId && this.localAvatar) {
@@ -469,6 +484,7 @@ export class MultiplayerScene extends Phaser.Scene {
     document.removeEventListener("visibilitychange", this.handleVisibilityChange);
     this.clearBombs();
     this.clearFlames();
+    this.clearPowerUps();
   }
 
   private createBombView(bomb: BombState): BombView {
@@ -517,6 +533,35 @@ export class MultiplayerScene extends Phaser.Scene {
     this.flames.clear();
   }
 
+  private createPowerUpView(powerUp: PowerUpState): PowerUpView {
+    const { fillColor, text } = getPowerUpVisual(powerUp.type);
+    const marker = this.add.rectangle(0, 0, 22, 22, fillColor, 1);
+    marker.setStrokeStyle(2, 0xf8fafc, 0.8);
+    const label = this.add.text(0, 0, text, {
+      fontFamily: "Arial",
+      fontSize: "13px",
+      color: "#f8fafc",
+      stroke: "#020617",
+      strokeThickness: 3
+    });
+    label.setOrigin(0.5, 0.5);
+
+    const root = this.add.container(powerUp.tileX * TILE_SIZE + TILE_SIZE / 2, powerUp.tileY * TILE_SIZE + TILE_SIZE / 2, [marker, label]);
+    root.setDepth(8);
+
+    return {
+      root,
+      marker,
+      label,
+      state: { ...powerUp }
+    };
+  }
+
+  private clearPowerUps() {
+    this.powerUps.forEach((powerUp) => powerUp.root.destroy(true));
+    this.powerUps.clear();
+  }
+
   private syncBombViews(bombs: BombState[]) {
     const nextBombIds = new Set(bombs.map((bomb) => bomb.id));
 
@@ -560,7 +605,39 @@ export class MultiplayerScene extends Phaser.Scene {
     });
   }
 
+  private syncPowerUpViews(powerUps: PowerUpState[]) {
+    const nextPowerUpIds = new Set(powerUps.map((powerUp) => powerUp.id));
+
+    this.powerUps.forEach((powerUp, powerUpId) => {
+      if (!nextPowerUpIds.has(powerUpId)) {
+        powerUp.root.destroy(true);
+        this.powerUps.delete(powerUpId);
+      }
+    });
+
+    powerUps.forEach((powerUp) => {
+      const existing = this.powerUps.get(powerUp.id);
+      if (existing) {
+        existing.state = { ...powerUp };
+        return;
+      }
+
+      this.powerUps.set(powerUp.id, this.createPowerUpView(powerUp));
+    });
+  }
+
   private toTileKey(tileX: number, tileY: number) {
     return `${tileX},${tileY}`;
+  }
+}
+
+function getPowerUpVisual(type: PowerUpState["type"]) {
+  switch (type) {
+    case "bomb_up":
+      return { fillColor: 0x2563eb, text: "B" };
+    case "flame_up":
+      return { fillColor: 0xea580c, text: "F" };
+    case "speed_up":
+      return { fillColor: 0x16a34a, text: "S" };
   }
 }

@@ -204,6 +204,10 @@ export default function App() {
             <dd>{selfPlayer?.flameRange ?? "-"}</dd>
           </div>
           <div>
+            <dt>이동 속도</dt>
+            <dd>{selfPlayer?.moveSpeed ?? "-"}</dd>
+          </div>
+          <div>
             <dt>결과</dt>
             <dd>{formatRoundResult(match, selfIdRef.current)}</dd>
           </div>

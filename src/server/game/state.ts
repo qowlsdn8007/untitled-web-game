@@ -9,6 +9,7 @@ import {
   type MatchState,
   type PlayerInputState,
   type PlayerState,
+  type PowerUpState,
   type TileType,
   tileToPixelCenter
 } from "../../shared/protocol.js";
@@ -21,6 +22,7 @@ export type GameState = {
   playerInputs: Map<string, PlayerInputState>;
   bombs: Map<string, BombState>;
   flames: FlameState[];
+  powerUps: Map<string, PowerUpState>;
   match: MatchState;
   pendingStartTimer: NodeJS.Timeout | null;
   pendingRestartTimer: NodeJS.Timeout | null;
@@ -34,6 +36,7 @@ export function createInitialGameState(): GameState {
     playerInputs: new Map<string, PlayerInputState>(),
     bombs: new Map<string, BombState>(),
     flames: [],
+    powerUps: new Map<string, PowerUpState>(),
     match: createWaitingMatchState(),
     pendingStartTimer: null,
     pendingRestartTimer: null
@@ -108,6 +111,7 @@ export function resetRoundState(state: GameState): void {
   state.grid = createRoundGrid();
   state.bombs.clear();
   state.flames = [];
+  state.powerUps.clear();
   state.playerInputs.clear();
 
   const players = [...state.players.values()];
@@ -135,6 +139,7 @@ export function createWorldSnapshot(state: GameState, selfId: string) {
     players: [...state.players.values()].map((player) => ({ ...player })),
     bombs: [...state.bombs.values()].map((bomb) => ({ ...bomb })),
     flames: state.flames.map((flame) => ({ ...flame })),
+    powerUps: [...state.powerUps.values()].map((powerUp) => ({ ...powerUp })),
     match: { ...state.match }
   };
 }

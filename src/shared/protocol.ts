@@ -12,10 +12,16 @@ export const FLAME_DURATION_MS = 500;
 export const SERVER_TICK_MS = 50;
 export const DEFAULT_BOMB_CAPACITY = 1;
 export const DEFAULT_FLAME_RANGE = 1;
+export const POWER_UP_DROP_CHANCE = 0.35;
+export const POWER_UP_SPEED_INCREMENT = 20;
+export const POWER_UP_MAX_BOMBS = 6;
+export const POWER_UP_MAX_FLAME_RANGE = 8;
+export const POWER_UP_MAX_SPEED = 360;
 
 export type Direction = "up" | "down" | "left" | "right";
 export type TileType = "empty" | "solid" | "breakable";
 export type MatchStatus = "waiting" | "starting" | "running" | "finished";
+export type PowerUpType = "bomb_up" | "flame_up" | "speed_up";
 
 export type SpawnTile = {
   tileX: number;
@@ -66,6 +72,14 @@ export type FlameState = {
   expiresAt: number;
 };
 
+export type PowerUpState = {
+  id: string;
+  type: PowerUpType;
+  tileX: number;
+  tileY: number;
+  spawnedAt: number;
+};
+
 export type BombPlacedPayload = {
   bomb: BombState;
   playerId: string;
@@ -81,6 +95,7 @@ export type WorldUpdatedPayload = {
   grid: TileType[][];
   bombs: BombState[];
   flames: FlameState[];
+  powerUps: PowerUpState[];
   playerBombs: PlayerBombInventoryPayload[];
 };
 
@@ -124,6 +139,7 @@ export type WorldInitPayload = {
   players: PlayerState[];
   bombs: BombState[];
   flames: FlameState[];
+  powerUps: PowerUpState[];
   match: MatchState;
 };
 

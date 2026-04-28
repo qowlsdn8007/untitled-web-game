@@ -104,7 +104,8 @@ function createExplosionState({
     grid,
     players: new Map(players.map((player) => [player.id, player])),
     bombs: new Map(bombs.map((bomb) => [bomb.id, bomb])),
-    flames
+    flames,
+    powerUps: new Map()
   };
 }
 

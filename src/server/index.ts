@@ -28,6 +28,7 @@ import {
   resetRoundState
 } from "./game/state.js";
 import { stepPlayerMovement } from "./game/movement.js";
+import { collectPowerUps } from "./game/powerups.js";
 import { applyFlameDamage, getRoundOutcome } from "./game/round.js";
 
 type InterServerEvents = Record<string, never>;
@@ -141,9 +142,18 @@ const tickTimer = setInterval(() => {
     io.emit("player:updated", toPlayerUpdatedPayload(nextState));
   });
 
+  const collectedPowerUps = collectPowerUps(gameState.players.values(), gameState.powerUps);
+  collectedPowerUps.updatedPlayers.forEach((player) => {
+    io.emit("player:updated", toPlayerUpdatedPayload(player));
+  });
+
   const worldUpdate = resolveExplosions(gameState, Date.now());
   if (worldUpdate) {
     io.emit("world:updated", toWorldUpdatedPayload(worldUpdate));
+  }
+
+  if (collectedPowerUps.collectedPowerUps.length > 0) {
+    emitWorldState();
   }
 
   const defeatedPlayers = applyFlameDamage(gameState.players.values(), gameState.flames);
@@ -208,6 +218,7 @@ function toWorldUpdatedPayload(payload: WorldUpdatedPayload): WorldUpdatedPayloa
     grid: payload.grid.map((row) => [...row]),
     bombs: payload.bombs.map((bomb) => ({ ...bomb })),
     flames: payload.flames.map((flame) => ({ ...flame })),
+    powerUps: payload.powerUps.map((powerUp) => ({ ...powerUp })),
     playerBombs: payload.playerBombs.map((playerBomb) => ({ ...playerBomb }))
   };
 }
@@ -241,6 +252,7 @@ function emitWorldState() {
       grid: gameState.grid,
       bombs: [...gameState.bombs.values()],
       flames: gameState.flames,
+      powerUps: [...gameState.powerUps.values()],
       playerBombs: [...gameState.players.values()].map((player) => ({
         id: player.id,
         activeBombs: player.activeBombs

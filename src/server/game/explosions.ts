@@ -1,6 +1,7 @@
-import { FLAME_DURATION_MS, type BombState, type FlameState, type TileType } from "../../shared/protocol.js";
+import { FLAME_DURATION_MS, type BombState, type FlameState, type PowerUpState, type TileType } from "../../shared/protocol.js";
 import { cloneGrid, getTileType } from "../../shared/map.js";
 import type { GameState } from "./state.js";
+import { spawnPowerUpFromDestroyedWall } from "./powerups.js";
 
 type PlayerBombInventory = {
   id: string;
@@ -12,10 +13,11 @@ export type ExplosionResolution = {
   grid: TileType[][];
   bombs: BombState[];
   flames: FlameState[];
+  powerUps: PowerUpState[];
   playerBombs: PlayerBombInventory[];
 };
 
-type ExplosionMutableState = Pick<GameState, "grid" | "bombs" | "flames" | "players">;
+type ExplosionMutableState = Pick<GameState, "grid" | "bombs" | "flames" | "players" | "powerUps">;
 
 export function resolveExplosions(state: ExplosionMutableState, now: number): ExplosionResolution | null {
   const activeFlames = state.flames.filter((flame) => flame.expiresAt > now);
@@ -70,7 +72,11 @@ export function resolveExplosions(state: ExplosionMutableState, now: number): Ex
         addFlame(nextFlames, tileX, tileY, now + FLAME_DURATION_MS);
 
         if (tileType === "breakable") {
+          const spawnedPowerUp = spawnPowerUpFromDestroyedWall(tileType, tileX, tileY, now);
           state.grid[tileY][tileX] = "empty";
+          if (spawnedPowerUp) {
+            state.powerUps.set(spawnedPowerUp.id, spawnedPowerUp);
+          }
           break;
         }
 
@@ -90,6 +96,7 @@ export function resolveExplosions(state: ExplosionMutableState, now: number): Ex
     grid: cloneGrid(state.grid),
     bombs: [...state.bombs.values()].map((bomb) => ({ ...bomb })),
     flames: state.flames.map((flame) => ({ ...flame })),
+    powerUps: [...state.powerUps.values()].map((powerUp) => ({ ...powerUp })),
     playerBombs: [...updatedPlayers].map((playerId) => {
       const player = state.players.get(playerId);
       return {
