@@ -6,6 +6,8 @@ import {
   PLAYER_SPEED,
   SPAWN_POINT,
   TILE_SIZE,
+  type BombPlacedPayload,
+  type BombState,
   type Direction,
   type PlayerInputPayload,
   type PlayerUpdatedPayload,
@@ -31,6 +33,13 @@ type Avatar = {
   targetY: number;
 };
 
+type BombView = {
+  root: Phaser.GameObjects.Container;
+  body: Phaser.GameObjects.Arc;
+  fuse: Phaser.GameObjects.Rectangle;
+  state: BombState;
+};
+
 const PLAYER_SIZE = 28;
 const SELF_RECONCILE_IGNORE_DISTANCE = 12;
 const SELF_RECONCILE_SNAP_DISTANCE = 96;
@@ -42,7 +51,9 @@ export class MultiplayerScene extends Phaser.Scene {
   private readonly onConnectionChange: SceneOptions["onConnectionChange"];
   private readonly onPlayerCountChange: SceneOptions["onPlayerCountChange"];
   private readonly remotePlayers = new Map<string, Avatar>();
+  private readonly bombs = new Map<string, BombView>();
   private cursors?: Phaser.Types.Input.Keyboard.CursorKeys;
+  private placeBombKey?: Phaser.Input.Keyboard.Key;
   private mapGraphics?: Phaser.GameObjects.Graphics;
   private selfId: string | null = null;
   private localAvatar?: Avatar;
@@ -72,6 +83,7 @@ export class MultiplayerScene extends Phaser.Scene {
 
   preload() {
     this.cursors = this.input.keyboard?.createCursorKeys();
+    this.placeBombKey = this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
   }
 
   create() {
@@ -123,6 +135,10 @@ export class MultiplayerScene extends Phaser.Scene {
       this.handleRemoteMove(payload);
     });
 
+    this.socket.on("bomb:placed", (payload) => {
+      this.handleBombPlaced(payload);
+    });
+
     this.socket.on("player:left", ({ id }) => {
       const avatar = this.remotePlayers.get(id);
       if (!avatar) {
@@ -144,6 +160,7 @@ export class MultiplayerScene extends Phaser.Scene {
 
     this.remotePlayers.forEach((avatar) => avatar.root.destroy(true));
     this.remotePlayers.clear();
+    this.clearBombs();
     this.localAvatar?.root.destroy(true);
     this.localAvatar = undefined;
 
@@ -156,6 +173,10 @@ export class MultiplayerScene extends Phaser.Scene {
       }
 
       this.remotePlayers.set(player.id, this.createAvatar(player, false));
+    });
+
+    payload.bombs.forEach((bomb) => {
+      this.bombs.set(bomb.id, this.createBombView(bomb));
     });
 
     if (!this.localAvatar) {
@@ -210,6 +231,10 @@ export class MultiplayerScene extends Phaser.Scene {
   private updateLocalPlayer(_: number) {
     if (!this.localAvatar || !this.cursors) {
       return;
+    }
+
+    if (this.placeBombKey && Phaser.Input.Keyboard.JustDown(this.placeBombKey)) {
+      this.socket.emit("bomb:place");
     }
 
     let moving = false;
@@ -287,6 +312,24 @@ export class MultiplayerScene extends Phaser.Scene {
     };
   }
 
+  private handleBombPlaced(payload: BombPlacedPayload) {
+    const existingView = this.bombs.get(payload.bomb.id);
+    if (existingView) {
+      existingView.state = payload.bomb;
+    } else {
+      this.bombs.set(payload.bomb.id, this.createBombView(payload.bomb));
+    }
+
+    if (payload.playerId === this.selfId && this.localAvatar) {
+      this.localAvatar.state.activeBombs = payload.activeBombs;
+    }
+
+    const ownerAvatar = payload.playerId === this.selfId ? this.localAvatar : this.remotePlayers.get(payload.playerId);
+    if (ownerAvatar) {
+      ownerAvatar.state.activeBombs = payload.activeBombs;
+    }
+  }
+
   private reconcileLocalAvatar(payload: PlayerUpdatedPayload) {
     if (!this.localAvatar) {
       return;
@@ -353,5 +396,29 @@ export class MultiplayerScene extends Phaser.Scene {
   private cleanupScene() {
     window.removeEventListener("blur", this.handleWindowBlur);
     document.removeEventListener("visibilitychange", this.handleVisibilityChange);
+    this.clearBombs();
+  }
+
+  private createBombView(bomb: BombState): BombView {
+    const body = this.add.circle(0, 4, 14, 0x111827, 1);
+    body.setStrokeStyle(3, 0x94a3b8, 1);
+
+    const fuse = this.add.rectangle(0, -10, 6, 10, 0xf59e0b, 1);
+    fuse.setStrokeStyle(2, 0xfef3c7, 1);
+
+    const root = this.add.container(bomb.tileX * TILE_SIZE + TILE_SIZE / 2, bomb.tileY * TILE_SIZE + TILE_SIZE / 2, [body, fuse]);
+    root.setDepth(10);
+
+    return {
+      root,
+      body,
+      fuse,
+      state: { ...bomb }
+    };
+  }
+
+  private clearBombs() {
+    this.bombs.forEach((bomb) => bomb.root.destroy(true));
+    this.bombs.clear();
   }
 }

@@ -1,4 +1,5 @@
 import {
+  type BombState,
   type Direction,
   type PlayerInputState,
   type PlayerState,
@@ -13,6 +14,7 @@ export function stepPlayerMovement(
   player: PlayerState,
   input: PlayerInputState | undefined,
   grid: TileType[][],
+  bombs: Iterable<BombState>,
   deltaMs: number
 ): PlayerState {
   if (!player.alive) {
@@ -40,7 +42,7 @@ export function stepPlayerMovement(
 
     nextState.direction = input.direction;
     const candidate = getAdjacentTile(player.tileX, player.tileY, input.direction);
-    if (!isWalkableTile(grid, candidate.tileX, candidate.tileY)) {
+    if (!isWalkableTile(grid, candidate.tileX, candidate.tileY) || isBlockedByBomb(candidate.tileX, candidate.tileY, player, bombs)) {
       return {
         ...nextState,
         moving: false
@@ -91,4 +93,19 @@ function moveAxisToward(current: number, target: number, step: number): number {
   }
 
   return Math.max(current - step, target);
+}
+
+function isBlockedByBomb(tileX: number, tileY: number, player: PlayerState, bombs: Iterable<BombState>): boolean {
+  for (const bomb of bombs) {
+    if (bomb.tileX !== tileX || bomb.tileY !== tileY) {
+      continue;
+    }
+
+    const isStandingOnBomb = bomb.tileX === player.tileX && bomb.tileY === player.tileY;
+    if (!isStandingOnBomb) {
+      return true;
+    }
+  }
+
+  return false;
 }

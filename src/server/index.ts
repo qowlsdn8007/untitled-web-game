@@ -4,12 +4,14 @@ import { createServer } from "node:http";
 import { Server } from "socket.io";
 import {
   SERVER_TICK_MS,
+  type BombPlacedPayload,
   type ClientToServerEvents,
   type JoinPayload,
   type PlayerInputPayload,
   type PlayerUpdatedPayload,
   type ServerToClientEvents
 } from "../shared/protocol.js";
+import { canPlaceBomb, createBomb } from "./game/bombs.js";
 import { clearPendingStart, syncMatchLifecycle } from "./game/match.js";
 import { createInitialGameState, createPlayerState, createWorldSnapshot } from "./game/state.js";
 import { stepPlayerMovement } from "./game/movement.js";
@@ -72,6 +74,29 @@ io.on("connection", (socket) => {
     gameState.playerInputs.set(playerId, payload);
   });
 
+  socket.on("bomb:place", () => {
+    const playerId = socket.data.playerId;
+    if (!playerId) {
+      return;
+    }
+
+    const player = gameState.players.get(playerId);
+    if (!player) {
+      return;
+    }
+
+    if (!canPlaceBomb(player, gameState.grid, gameState.bombs.values(), gameState.match.status)) {
+      return;
+    }
+
+    const bomb = createBomb(playerId, player, Date.now());
+    gameState.bombs.set(bomb.id, bomb);
+    player.activeBombs += 1;
+
+    io.emit("bomb:placed", toBombPlacedPayload(bomb, player));
+    io.emit("player:updated", toPlayerUpdatedPayload(player));
+  });
+
   socket.on("disconnect", () => {
     const playerId = socket.data.playerId;
     if (!playerId) {
@@ -92,7 +117,7 @@ const tickTimer = setInterval(() => {
 
   gameState.players.forEach((player, playerId) => {
     const input = gameState.playerInputs.get(playerId);
-    const nextState = stepPlayerMovement(player, input, gameState.grid, SERVER_TICK_MS);
+    const nextState = stepPlayerMovement(player, input, gameState.grid, gameState.bombs.values(), SERVER_TICK_MS);
 
     if (!didPlayerChange(player, nextState)) {
       return;
@@ -135,6 +160,17 @@ function toPlayerUpdatedPayload(player: import("../shared/protocol.js").PlayerSt
     alive: player.alive,
     activeBombs: player.activeBombs,
     flameRange: player.flameRange
+  };
+}
+
+function toBombPlacedPayload(
+  bomb: import("../shared/protocol.js").BombState,
+  player: import("../shared/protocol.js").PlayerState
+): BombPlacedPayload {
+  return {
+    bomb: { ...bomb },
+    playerId: player.id,
+    activeBombs: player.activeBombs
   };
 }
 

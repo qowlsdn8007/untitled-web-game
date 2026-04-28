@@ -66,6 +66,12 @@ export type FlameState = {
   expiresAt: number;
 };
 
+export type BombPlacedPayload = {
+  bomb: BombState;
+  playerId: string;
+  activeBombs: number;
+};
+
 export type MatchState = {
   status: MatchStatus;
   round: number;
@@ -136,12 +142,14 @@ export type ServerToClientEvents = {
   "match:state": (payload: MatchStatePayload) => void;
   "player:joined": (payload: PlayerState) => void;
   "player:updated": (payload: PlayerUpdatedPayload) => void;
+  "bomb:placed": (payload: BombPlacedPayload) => void;
   "player:left": (payload: PlayerLeftPayload) => void;
 };
 
 export type ClientToServerEvents = {
   "player:join": (payload: JoinPayload) => void;
   "player:input": (payload: PlayerInputPayload) => void;
+  "bomb:place": () => void;
 };
 
 export function tileToPixelCenter(tileCoordinate: number): number {
