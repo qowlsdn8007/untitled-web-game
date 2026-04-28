@@ -10,10 +10,14 @@ Recommended execution order:
 4. [PR 4 - Explosion And Destruction](/Users/bjw/Documents/Codex/2026-04-27-new-chat/docs/plans/pr-4-explosion-and-destruction.md)
 5. [PR 5 - Round Flow And HUD](/Users/bjw/Documents/Codex/2026-04-27-new-chat/docs/plans/pr-5-round-flow-and-hud.md)
 
+Next expansion tracks:
+
+- [PowerUp V2](/Users/bjw/Documents/Codex/2026-04-27-new-chat/docs/plans/powerup-v2-index.md)
+- [Online Bomberman Next Steps](/Users/bjw/Documents/Codex/2026-04-27-new-chat/docs/plans/online-bomberman-next-steps.md)
+
 Cross-cutting rules:
 
 - Keep the server authoritative for movement, bombs, flame resolution, deaths, and round flow.
 - Keep protocol types centralized under `src/shared`.
 - Keep Phaser rendering concerns separate from server game-state decisions.
 - Use the harness files in `AGENTS.md` and `docs/harness/` as behavioral guidance while implementing these plans.
-
