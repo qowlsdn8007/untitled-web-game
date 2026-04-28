@@ -3,19 +3,18 @@ import cors from "cors";
 import { createServer } from "node:http";
 import { Server } from "socket.io";
 import {
-  MAP_ID,
-  MAP_HEIGHT,
-  MAP_WIDTH,
-  SPAWN_POINT,
   TILE_SIZE,
   type ClientToServerEvents,
   type Direction,
-  type MovePayload,
   type JoinPayload,
+  type MovePayload,
   type PlayerState,
+  type PlayerUpdatedPayload,
   type ServerToClientEvents
 } from "../shared/protocol.js";
 import { isBlockedAt } from "../shared/map.js";
+import { clearPendingStart, syncMatchLifecycle } from "./game/match.js";
+import { createInitialGameState, createPlayerState, createWorldSnapshot } from "./game/state.js";
 
 type InterServerEvents = Record<string, never>;
 type SocketData = {
@@ -29,11 +28,15 @@ app.use(
   })
 );
 
+const gameState = createInitialGameState();
+
 app.get("/health", (_req, res) => {
   res.json({
     ok: true,
-    players: players.size,
-    mapId: MAP_ID
+    players: gameState.players.size,
+    mapId: gameState.mapId,
+    matchStatus: gameState.match.status,
+    round: gameState.match.round
   });
 });
 
@@ -45,29 +48,17 @@ const io = new Server<ClientToServerEvents, ServerToClientEvents, InterServerEve
   }
 });
 
-const players = new Map<string, PlayerState>();
-
 io.on("connection", (socket) => {
   socket.on("player:join", ({ nickname }: JoinPayload) => {
-    const player: PlayerState = {
-      id: socket.id,
-      nickname: sanitizeNickname(nickname),
-      x: SPAWN_POINT.x,
-      y: SPAWN_POINT.y,
-      direction: "down",
-      moving: false
-    };
+    const player = createPlayerState(socket.id, sanitizeNickname(nickname), gameState.players.size);
 
     socket.data.playerId = player.id;
-    players.set(player.id, player);
+    gameState.players.set(player.id, player);
 
-    socket.emit("world:init", {
-      selfId: player.id,
-      mapId: MAP_ID,
-      players: [...players.values()]
-    });
-
+    socket.emit("world:init", createWorldSnapshot(gameState, player.id));
     socket.broadcast.emit("player:joined", player);
+
+    syncMatchLifecycle(io, gameState);
   });
 
   socket.on("player:move", (payload: MovePayload) => {
@@ -76,21 +67,28 @@ io.on("connection", (socket) => {
       return;
     }
 
-    const currentPlayer = players.get(playerId);
+    const currentPlayer = gameState.players.get(playerId);
     if (!currentPlayer) {
       return;
     }
 
     const nextState = normalizeMove(currentPlayer, payload);
-    players.set(playerId, nextState);
+    gameState.players.set(playerId, nextState);
 
-    io.emit("player:moved", {
+    const playerUpdatedPayload: PlayerUpdatedPayload = {
       id: playerId,
-      x: nextState.x,
-      y: nextState.y,
+      tileX: nextState.tileX,
+      tileY: nextState.tileY,
+      pixelX: nextState.pixelX,
+      pixelY: nextState.pixelY,
       direction: nextState.direction,
-      moving: nextState.moving
-    });
+      moving: nextState.moving,
+      alive: nextState.alive,
+      activeBombs: nextState.activeBombs,
+      flameRange: nextState.flameRange
+    };
+
+    io.emit("player:updated", playerUpdatedPayload);
   });
 
   socket.on("disconnect", () => {
@@ -99,14 +97,19 @@ io.on("connection", (socket) => {
       return;
     }
 
-    players.delete(playerId);
+    gameState.players.delete(playerId);
     socket.broadcast.emit("player:left", { id: playerId });
+    syncMatchLifecycle(io, gameState);
   });
 });
 
 const port = Number(process.env.PORT ?? 3001);
 server.listen(port, () => {
   console.log(`Multiplayer map server listening on http://localhost:${port}`);
+});
+
+process.on("SIGTERM", () => {
+  clearPendingStart(gameState);
 });
 
 function sanitizeNickname(nickname: string): string {
@@ -116,19 +119,26 @@ function sanitizeNickname(nickname: string): string {
 
 function normalizeMove(currentPlayer: PlayerState, payload: MovePayload): PlayerState {
   const half = 14;
-  const x = clamp(payload.x, half, MAP_WIDTH * TILE_SIZE - half);
-  const y = clamp(payload.y, half, MAP_HEIGHT * TILE_SIZE - half);
+  const maxPixelX = gameState.grid[0].length * TILE_SIZE - half;
+  const maxPixelY = gameState.grid.length * TILE_SIZE - half;
+  const pixelX = clamp(payload.x, half, maxPixelX);
+  const pixelY = clamp(payload.y, half, maxPixelY);
   const direction = sanitizeDirection(payload.direction);
   const canOccupy =
-    !isBlockedAt(x - half, y - half) &&
-    !isBlockedAt(x + half, y - half) &&
-    !isBlockedAt(x - half, y + half) &&
-    !isBlockedAt(x + half, y + half);
+    !isBlockedAt(pixelX - half, pixelY - half, gameState.grid) &&
+    !isBlockedAt(pixelX + half, pixelY - half, gameState.grid) &&
+    !isBlockedAt(pixelX - half, pixelY + half, gameState.grid) &&
+    !isBlockedAt(pixelX + half, pixelY + half, gameState.grid);
+
+  const resolvedX = canOccupy ? pixelX : currentPlayer.pixelX;
+  const resolvedY = canOccupy ? pixelY : currentPlayer.pixelY;
 
   return {
     ...currentPlayer,
-    x: canOccupy ? x : currentPlayer.x,
-    y: canOccupy ? y : currentPlayer.y,
+    tileX: Math.floor(resolvedX / TILE_SIZE),
+    tileY: Math.floor(resolvedY / TILE_SIZE),
+    pixelX: resolvedX,
+    pixelY: resolvedY,
     direction,
     moving: Boolean(payload.moving)
   };

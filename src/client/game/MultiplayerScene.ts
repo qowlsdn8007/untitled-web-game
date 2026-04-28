@@ -8,7 +8,7 @@ import {
   TILE_SIZE,
   type Direction,
   type MovePayload,
-  type PlayerMovedPayload,
+  type PlayerUpdatedPayload,
   type PlayerState,
   type WorldInitPayload
 } from "../../shared/protocol";
@@ -116,7 +116,7 @@ export class MultiplayerScene extends Phaser.Scene {
       }
     });
 
-    this.socket.on("player:moved", (payload) => {
+    this.socket.on("player:updated", (payload) => {
       this.handleRemoteMove(payload);
     });
 
@@ -159,10 +159,17 @@ export class MultiplayerScene extends Phaser.Scene {
       const fallbackState: PlayerState = {
         id: payload.selfId,
         nickname: this.nickname,
-        x: SPAWN_POINT.x,
-        y: SPAWN_POINT.y,
+        tileX: 1,
+        tileY: 1,
+        pixelX: SPAWN_POINT.x,
+        pixelY: SPAWN_POINT.y,
         direction: "down",
-        moving: false
+        moving: false,
+        alive: true,
+        maxBombs: 1,
+        activeBombs: 0,
+        flameRange: 1,
+        moveSpeed: PLAYER_SPEED
       };
       this.localAvatar = this.createAvatar(fallbackState, true);
       this.cameras.main.startFollow(this.localAvatar.root, true, 0.15, 0.15);
@@ -184,7 +191,7 @@ export class MultiplayerScene extends Phaser.Scene {
     });
     label.setOrigin(0.5, 0.5);
 
-    const root = this.add.container(player.x, player.y, [sprite, label]);
+    const root = this.add.container(player.pixelX, player.pixelY, [sprite, label]);
     root.setSize(PLAYER_SIZE, PLAYER_SIZE);
 
     return {
@@ -192,8 +199,8 @@ export class MultiplayerScene extends Phaser.Scene {
       sprite,
       label,
       state: { ...player },
-      targetX: player.x,
-      targetY: player.y
+      targetX: player.pixelX,
+      targetY: player.pixelY
     };
   }
 
@@ -202,8 +209,8 @@ export class MultiplayerScene extends Phaser.Scene {
       return;
     }
 
-    const previousX = this.localAvatar.state.x;
-    const previousY = this.localAvatar.state.y;
+    const previousX = this.localAvatar.state.pixelX;
+    const previousY = this.localAvatar.state.pixelY;
     const previousMoving = this.localAvatar.state.moving;
     const input = new Phaser.Math.Vector2(0, 0);
 
@@ -234,8 +241,10 @@ export class MultiplayerScene extends Phaser.Scene {
 
     const resolved = this.resolveCollision(nextX, nextY, this.localAvatar.root.x, this.localAvatar.root.y);
     this.localAvatar.root.setPosition(resolved.x, resolved.y);
-    this.localAvatar.state.x = resolved.x;
-    this.localAvatar.state.y = resolved.y;
+    this.localAvatar.state.pixelX = resolved.x;
+    this.localAvatar.state.pixelY = resolved.y;
+    this.localAvatar.state.tileX = Math.floor(resolved.x / TILE_SIZE);
+    this.localAvatar.state.tileY = Math.floor(resolved.y / TILE_SIZE);
     this.localAvatar.state.direction = this.lastDirection;
     this.localAvatar.state.moving = isMoving;
 
@@ -280,7 +289,7 @@ export class MultiplayerScene extends Phaser.Scene {
     });
   }
 
-  private handleRemoteMove(payload: PlayerMovedPayload) {
+  private handleRemoteMove(payload: PlayerUpdatedPayload) {
     if (payload.id === this.selfId) {
       this.reconcileLocalAvatar(payload);
       return;
@@ -291,28 +300,28 @@ export class MultiplayerScene extends Phaser.Scene {
       return;
     }
 
-    avatar.targetX = payload.x;
-    avatar.targetY = payload.y;
+    avatar.targetX = payload.pixelX;
+    avatar.targetY = payload.pixelY;
     avatar.state = {
       ...avatar.state,
       ...payload
     };
   }
 
-  private reconcileLocalAvatar(payload: PlayerMovedPayload) {
+  private reconcileLocalAvatar(payload: PlayerUpdatedPayload) {
     if (!this.localAvatar) {
       return;
     }
 
-    const deltaX = payload.x - this.localAvatar.root.x;
-    const deltaY = payload.y - this.localAvatar.root.y;
+    const deltaX = payload.pixelX - this.localAvatar.root.x;
+    const deltaY = payload.pixelY - this.localAvatar.root.y;
     const distance = Math.hypot(deltaX, deltaY);
 
     if (distance >= SELF_RECONCILE_SNAP_DISTANCE) {
-      this.localAvatar.root.setPosition(payload.x, payload.y);
+      this.localAvatar.root.setPosition(payload.pixelX, payload.pixelY);
     } else if (distance >= SELF_RECONCILE_IGNORE_DISTANCE) {
-      const nextX = Phaser.Math.Linear(this.localAvatar.root.x, payload.x, SELF_RECONCILE_LERP_FACTOR);
-      const nextY = Phaser.Math.Linear(this.localAvatar.root.y, payload.y, SELF_RECONCILE_LERP_FACTOR);
+      const nextX = Phaser.Math.Linear(this.localAvatar.root.x, payload.pixelX, SELF_RECONCILE_LERP_FACTOR);
+      const nextY = Phaser.Math.Linear(this.localAvatar.root.y, payload.pixelY, SELF_RECONCILE_LERP_FACTOR);
       this.localAvatar.root.setPosition(nextX, nextY);
     }
 
@@ -321,8 +330,10 @@ export class MultiplayerScene extends Phaser.Scene {
     this.localAvatar.state = {
       ...this.localAvatar.state,
       ...payload,
-      x: this.localAvatar.root.x,
-      y: this.localAvatar.root.y
+      pixelX: this.localAvatar.root.x,
+      pixelY: this.localAvatar.root.y,
+      tileX: Math.floor(this.localAvatar.root.x / TILE_SIZE),
+      tileY: Math.floor(this.localAvatar.root.y / TILE_SIZE)
     };
   }
 
@@ -372,8 +383,8 @@ export class MultiplayerScene extends Phaser.Scene {
     this.sequence += 1;
 
     const payload: MovePayload = {
-      x: this.localAvatar.state.x,
-      y: this.localAvatar.state.y,
+      x: this.localAvatar.state.pixelX,
+      y: this.localAvatar.state.pixelY,
       direction: this.lastDirection,
       moving: false,
       seq: this.sequence
