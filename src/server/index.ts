@@ -20,16 +20,22 @@ import { clearPendingStart, syncMatchLifecycle } from "./game/match.js";
 import { emitMatchState } from "./game/match.js";
 import {
   createFinishedMatchState,
-  createInitialGameState,
   createPlayerState,
   createRunningMatchState,
   createWaitingMatchState,
   createWorldSnapshot,
+  type GameState,
   resetRoundState
 } from "./game/state.js";
 import { stepPlayerMovement } from "./game/movement.js";
 import { collectPowerUps } from "./game/powerups.js";
 import { applyFlameDamage, getRoundOutcome } from "./game/round.js";
+import {
+  cleanupRoomIfEmpty,
+  getOrCreateRoomState,
+  resolveJoinRoomId,
+  type RoomRegistry
+} from "./game/rooms.js";
 
 type InterServerEvents = Record<string, never>;
 type SocketData = {
@@ -44,7 +50,7 @@ app.use(
   })
 );
 
-const roomStates = new Map<string, ReturnType<typeof createInitialGameState>>();
+const roomStates: RoomRegistry = new Map();
 
 app.get("/health", (_req, res) => {
   const rooms = [...roomStates.values()];
@@ -67,9 +73,10 @@ const io = new Server<ClientToServerEvents, ServerToClientEvents, InterServerEve
 });
 
 io.on("connection", (socket) => {
-  socket.on("player:join", ({ nickname, roomId }: JoinPayload) => {
-    const normalizedRoomId = normalizeRoomId(roomId);
-    const roomState = getOrCreateRoomState(normalizedRoomId);
+  socket.on("player:join", (payload: JoinPayload) => {
+    const { nickname } = payload;
+    const normalizedRoomId = resolveJoinRoomId(roomStates, payload);
+    const roomState = getOrCreateRoomState(roomStates, normalizedRoomId);
     const player = createPlayerState(socket.id, sanitizeNickname(nickname), roomState.players.size);
 
     socket.join(normalizedRoomId);
@@ -155,7 +162,7 @@ io.on("connection", (socket) => {
     roomState.playerInputs.delete(playerId);
     socket.to(roomId).emit("player:left", { id: playerId });
     syncMatchLifecycle(io, roomState, roomId);
-    cleanupRoomIfEmpty(roomId);
+    cleanupRoomIfEmpty(roomStates, roomId, clearPendingStart);
   });
 });
 
@@ -265,7 +272,7 @@ function toWorldUpdatedPayload(payload: WorldUpdatedPayload): WorldUpdatedPayloa
   };
 }
 
-function finishRound(roomId: string, roomState: ReturnType<typeof createInitialGameState>, winnerId: string | null) {
+function finishRound(roomId: string, roomState: GameState, winnerId: string | null) {
   roomState.match = createFinishedMatchState(roomState.match.round, winnerId, Date.now());
   emitMatchState(io, roomState, roomId);
 
@@ -287,7 +294,7 @@ function finishRound(roomId: string, roomState: ReturnType<typeof createInitialG
   }, ROUND_RESTART_DELAY_MS);
 }
 
-function emitWorldState(roomId: string, roomState: ReturnType<typeof createInitialGameState>) {
+function emitWorldState(roomId: string, roomState: GameState) {
   io.to(roomId).emit(
     "world:updated",
     toWorldUpdatedPayload({
@@ -312,30 +319,4 @@ function didPlayerChange(previous: import("../shared/protocol.js").PlayerState, 
     previous.direction !== next.direction ||
     previous.moving !== next.moving
   );
-}
-
-function getOrCreateRoomState(roomId: string) {
-  const existing = roomStates.get(roomId);
-  if (existing) {
-    return existing;
-  }
-
-  const next = createInitialGameState();
-  roomStates.set(roomId, next);
-  return next;
-}
-
-function cleanupRoomIfEmpty(roomId: string) {
-  const roomState = roomStates.get(roomId);
-  if (!roomState || roomState.players.size > 0) {
-    return;
-  }
-
-  clearPendingStart(roomState);
-  roomStates.delete(roomId);
-}
-
-function normalizeRoomId(rawRoomId: string) {
-  const trimmed = rawRoomId.trim().toLowerCase().slice(0, 24);
-  return trimmed.length > 0 ? trimmed : "public-1";
 }

@@ -10,6 +10,7 @@ import {
   type BombState,
   type Direction,
   type FlameState,
+  type JoinMode,
   type PlayerInputPayload,
   type PlayerUpdatedPayload,
   type PlayerState,
@@ -25,6 +26,7 @@ type SceneOptions = {
   socket: GameSocket;
   nickname: string;
   roomId: string;
+  joinMode: JoinMode;
   onConnectionChange: (connected: boolean) => void;
   onPlayerCountChange: (count: number) => void;
 };
@@ -66,6 +68,7 @@ export class MultiplayerScene extends Phaser.Scene {
   private readonly socket: GameSocket;
   private readonly nickname: string;
   private readonly roomId: string;
+  private readonly joinMode: JoinMode;
   private readonly onConnectionChange: SceneOptions["onConnectionChange"];
   private readonly onPlayerCountChange: SceneOptions["onPlayerCountChange"];
   private readonly remotePlayers = new Map<string, Avatar>();
@@ -101,6 +104,7 @@ export class MultiplayerScene extends Phaser.Scene {
     this.socket = options.socket;
     this.nickname = options.nickname;
     this.roomId = options.roomId;
+    this.joinMode = options.joinMode;
     this.onConnectionChange = options.onConnectionChange;
     this.onPlayerCountChange = options.onPlayerCountChange;
   }
@@ -132,7 +136,11 @@ export class MultiplayerScene extends Phaser.Scene {
   private bindSocketEvents() {
     this.socket.on("connect", () => {
       this.onConnectionChange(true);
-      this.socket.emit("player:join", { nickname: this.nickname, roomId: this.roomId });
+      this.socket.emit("player:join", {
+        nickname: this.nickname,
+        roomId: this.roomId,
+        joinMode: this.joinMode
+      });
     });
 
     this.socket.on("disconnect", () => {

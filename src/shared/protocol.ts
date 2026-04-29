@@ -22,6 +22,7 @@ export type Direction = "up" | "down" | "left" | "right";
 export type TileType = "empty" | "solid" | "breakable";
 export type MatchStatus = "waiting" | "starting" | "running" | "finished";
 export type PowerUpType = "bomb_up" | "flame_up" | "speed_up";
+export type JoinMode = "room" | "quick";
 
 export type SpawnTile = {
   tileX: number;
@@ -110,7 +111,8 @@ export type MatchState = {
 
 export type JoinPayload = {
   nickname: string;
-  roomId: string;
+  roomId?: string;
+  joinMode?: JoinMode;
 };
 
 export type MovePayload = {

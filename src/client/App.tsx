@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import Phaser from "phaser";
 import { MultiplayerScene } from "./game/MultiplayerScene";
 import { createGameSocket, type GameSocket } from "./network/gameSocket";
-import { MAP_HEIGHT, MAP_WIDTH, TILE_SIZE, type MatchState, type PlayerState } from "../shared/protocol";
+import { MAP_HEIGHT, MAP_WIDTH, TILE_SIZE, type JoinMode, type MatchState, type PlayerState } from "../shared/protocol";
 
 const GAME_WIDTH = MAP_WIDTH * TILE_SIZE;
 const GAME_HEIGHT = MAP_HEIGHT * TILE_SIZE;
@@ -16,6 +16,7 @@ export default function App() {
   const [roomCode, setRoomCode] = useState("public-1");
   const [submittedNickname, setSubmittedNickname] = useState("");
   const [submittedRoomCode, setSubmittedRoomCode] = useState("");
+  const [submittedJoinMode, setSubmittedJoinMode] = useState<JoinMode>("room");
   const [isConnected, setIsConnected] = useState(false);
   const [playerCount, setPlayerCount] = useState(0);
   const [status, setStatus] = useState("닉네임을 입력하고 맵에 입장하세요.");
@@ -97,6 +98,7 @@ export default function App() {
       socket,
       nickname: submittedNickname,
       roomId: submittedRoomCode,
+      joinMode: submittedJoinMode,
       onConnectionChange: (connected) => {
         setIsConnected(connected);
       },
@@ -134,7 +136,7 @@ export default function App() {
       game.destroy(true);
       gameRef.current = null;
     };
-  }, [submittedNickname, submittedRoomCode]);
+  }, [submittedJoinMode, submittedNickname, submittedRoomCode]);
 
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -147,7 +149,21 @@ export default function App() {
 
     setSubmittedNickname(trimmed);
     setSubmittedRoomCode(normalizeRoomCode(roomCode));
+    setSubmittedJoinMode("room");
     setStatus("서버에 연결 중입니다...");
+  };
+
+  const handleQuickMatch = () => {
+    const trimmed = nickname.trim();
+    if (!trimmed) {
+      setStatus("닉네임은 비워둘 수 없습니다.");
+      return;
+    }
+
+    setSubmittedNickname(trimmed);
+    setSubmittedRoomCode("quick");
+    setSubmittedJoinMode("quick");
+    setStatus("빠른 매치를 찾는 중입니다...");
   };
 
   return (
@@ -181,9 +197,14 @@ export default function App() {
             onChange={(event) => setRoomCode(event.target.value)}
             disabled={Boolean(submittedNickname)}
           />
-          <button type="submit" disabled={Boolean(submittedNickname)}>
-            {submittedNickname ? "입장 완료" : "맵 입장"}
-          </button>
+          <div className="join-actions">
+            <button type="submit" disabled={Boolean(submittedNickname)}>
+              {submittedNickname ? "입장 완료" : "방 입장"}
+            </button>
+            <button className="secondary" type="button" onClick={handleQuickMatch} disabled={Boolean(submittedNickname)}>
+              빠른 매치
+            </button>
+          </div>
         </form>
 
         <dl className="status-panel">
