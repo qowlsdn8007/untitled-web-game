@@ -179,7 +179,19 @@ CLIENT_ORIGIN=https://untitled-web-game.vercel.app
 4. Vercel 배포 URL을 확인한 뒤 Render의 `CLIENT_ORIGIN`을 그 주소로 업데이트한다.
 5. 브라우저 2개 이상으로 접속해 멀티플레이를 확인한다.
 
-### 4. 환경 변수 예시 파일
+### 4. 초대 링크
+
+클라이언트는 query 기반 초대 링크를 지원합니다.
+
+```text
+https://your-vercel-app.vercel.app/?room=public-1
+```
+
+앱 안에서 `초대 링크 복사` 버튼을 누르면 현재 방 코드가 포함된 링크가 생성됩니다. `빠른 매치`로 입장한 경우에도 서버가 실제 방을 배정한 뒤 URL이 해당 방 코드로 갱신됩니다.
+
+앱 런타임은 `/room/:roomId` 형태도 읽을 수 있지만, 정적 Vercel 배포에서 직접 새로고침까지 안정적으로 처리하려면 별도 rewrite 설정이 필요합니다. 기본 공유 링크는 `?room=` 형식을 권장합니다.
+
+### 5. 환경 변수 예시 파일
 
 로컬 확인용 예시는 [.env.example](/Users/bjw/Documents/Codex/2026-04-27-new-chat/.env.example)에 들어 있습니다.
 

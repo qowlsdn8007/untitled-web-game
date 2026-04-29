@@ -21,7 +21,7 @@ export default function App() {
   const socketRef = useRef<GameSocket | null>(null);
   const selfIdRef = useRef<string | null>(null);
   const [nickname, setNickname] = useState("");
-  const [roomCode, setRoomCode] = useState("public-1");
+  const [roomCode, setRoomCode] = useState(() => getInitialRoomCode());
   const [submittedNickname, setSubmittedNickname] = useState("");
   const [submittedRoomCode, setSubmittedRoomCode] = useState("");
   const [submittedJoinMode, setSubmittedJoinMode] = useState<JoinMode>("room");
@@ -33,6 +33,7 @@ export default function App() {
   const [selfPlayer, setSelfPlayer] = useState<PlayerState | null>(null);
   const [currentRoomId, setCurrentRoomId] = useState<string | null>(null);
   const [nowMs, setNowMs] = useState(() => Date.now());
+  const [inviteStatus, setInviteStatus] = useState("");
 
   useEffect(() => {
     if (!submittedNickname || !submittedRoomCode) {
@@ -65,6 +66,8 @@ export default function App() {
     socket.on("world:init", (payload) => {
       selfIdRef.current = payload.selfId;
       setCurrentRoomId(payload.roomId);
+      setRoomCode(payload.roomId);
+      syncRoomUrl(payload.roomId);
       setMatch(payload.match);
       setPlayerCount(payload.players.length);
       setReadyCount(payload.players.filter((player) => player.ready).length);
@@ -175,6 +178,7 @@ export default function App() {
     setSubmittedNickname(trimmed);
     setSubmittedRoomCode(normalizeRoomCode(roomCode));
     setSubmittedJoinMode("room");
+    setInviteStatus("");
     setStatus("서버에 연결 중입니다...");
   };
 
@@ -188,6 +192,7 @@ export default function App() {
     setSubmittedNickname(trimmed);
     setSubmittedRoomCode("quick");
     setSubmittedJoinMode("quick");
+    setInviteStatus("");
     setStatus("빠른 매치를 찾는 중입니다...");
   };
 
@@ -197,6 +202,18 @@ export default function App() {
     }
 
     socketRef.current?.emit("player:ready", { ready: !selfPlayer.ready });
+  };
+
+  const handleCopyInviteLink = async () => {
+    const inviteRoomId = currentRoomId ?? normalizeRoomCode(roomCode);
+    const inviteUrl = createInviteUrl(inviteRoomId);
+
+    try {
+      await copyText(inviteUrl);
+      setInviteStatus("초대 링크를 복사했습니다.");
+    } catch {
+      setInviteStatus(inviteUrl);
+    }
   };
 
   const roundOverlay = getRoundOverlay(match, selfPlayer, selfIdRef.current, nowMs);
@@ -241,6 +258,13 @@ export default function App() {
             </button>
           </div>
         </form>
+
+        <div className="invite-panel">
+          <button type="button" onClick={handleCopyInviteLink} disabled={!currentRoomId && !roomCode}>
+            초대 링크 복사
+          </button>
+          <p>{inviteStatus || "친구에게 링크를 보내 같은 방으로 초대하세요."}</p>
+        </div>
 
         <dl className="status-panel">
           <div>
@@ -330,6 +354,59 @@ export default function App() {
 function normalizeRoomCode(value: string) {
   const trimmed = value.trim().toLowerCase().slice(0, 24);
   return trimmed.length > 0 ? trimmed : "public-1";
+}
+
+function getInitialRoomCode() {
+  const roomFromQuery = new URLSearchParams(window.location.search).get("room");
+  if (roomFromQuery) {
+    return normalizeRoomCode(roomFromQuery);
+  }
+
+  const roomPathMatch = window.location.pathname.match(/^\/room\/([^/]+)$/);
+  if (roomPathMatch) {
+    return normalizeRoomCode(decodeURIComponent(roomPathMatch[1]));
+  }
+
+  return "public-1";
+}
+
+function createInviteUrl(roomId: string) {
+  const url = new URL(window.location.href);
+  url.pathname = "/";
+  url.search = "";
+  url.hash = "";
+  url.searchParams.set("room", normalizeRoomCode(roomId));
+  return url.toString();
+}
+
+function syncRoomUrl(roomId: string) {
+  const nextUrl = createInviteUrl(roomId);
+  if (window.location.href === nextUrl) {
+    return;
+  }
+
+  window.history.replaceState(null, "", nextUrl);
+}
+
+async function copyText(text: string) {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+
+  const textarea = document.createElement("textarea");
+  textarea.value = text;
+  textarea.setAttribute("readonly", "true");
+  textarea.style.position = "fixed";
+  textarea.style.opacity = "0";
+  document.body.append(textarea);
+  textarea.select();
+
+  try {
+    document.execCommand("copy");
+  } finally {
+    textarea.remove();
+  }
 }
 
 function canToggleReady(match: MatchState | null) {

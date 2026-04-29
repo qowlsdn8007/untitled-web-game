@@ -117,6 +117,37 @@ input {
   opacity: 0.7;
 }
 
+.invite-panel {
+  display: grid;
+  gap: 10px;
+  padding: 16px;
+  border-radius: 18px;
+  background: rgba(8, 17, 31, 0.62);
+  border: 1px dashed rgba(125, 211, 252, 0.32);
+}
+
+.invite-panel button {
+  padding: 12px 14px;
+  border: 0;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #38bdf8, #2563eb);
+  color: #eff6ff;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.invite-panel button:disabled {
+  cursor: default;
+  opacity: 0.58;
+}
+
+.invite-panel p {
+  margin: 0;
+  color: #bae6fd;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
 .status-panel {
   display: grid;
   gap: 16px;
