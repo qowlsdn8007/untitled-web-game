@@ -26,7 +26,7 @@ Reference:
 
 ### 2. Room And Match Structure V3
 
-Status: mostly completed
+Status: completed for current demo scope
 
 Delivered:
 
@@ -36,9 +36,6 @@ Delivered:
 - quick match room assignment
 - room cleanup when empty
 - room registry tests
-
-Remaining polish:
-
 - invite-link URL flow
 - visible copy-link action
 - stricter room capacity behavior for full rooms
@@ -49,7 +46,7 @@ Reference:
 
 ### 3. Spectator, Ready, And Round UX V3
 
-Status: mostly completed
+Status: completed for current demo scope
 
 Delivered:
 
@@ -62,17 +59,28 @@ Delivered:
 - round result overlay
 - camera fallback to a living player after local KO
 
-Remaining polish:
-
-- richer waiting-room player slot display
-- clearer rematch/next-round ready prompt after a round ends
-- explicit spectator mode for late joiners or full rooms
-
 Reference:
 
 - [Spectator, Ready, And Round UX V3](/Users/bjw/Documents/Codex/2026-04-27-new-chat/docs/plans/spectator-ready-and-round-ux-v3.md)
 
-## Next Implementation Order
+### 4. Productization Follow-Up Bundle
+
+Status: completed for current demo scope
+
+Delivered:
+
+- room invite links with `?room=` support
+- copy invite link action
+- quick-match URL sync after server assignment
+- match feel effects: bomb pulse, flame pop, camera flash/shake, KO burst
+- generated Phaser texture manifest for player, bomb, flame, and power-up visuals
+- 4 room-selected arenas: `classic-yard`, `tight-corners`, `crossfire`, `islands`
+- local profile nickname persistence
+- local stats for rounds, wins, losses, draws, self-KOs, and bombs placed
+- server-side bot filler for solo playtests
+- demo guardrails: room capacity errors, event cooldowns, active match health metrics
+
+## Completed Implementation Order
 
 ### 1. Room Invite Links And Quick-Match Polish
 
@@ -226,6 +234,40 @@ Acceptance criteria:
 - reconnect behavior is predictable
 - Render/Vercel deployment remains simple
 - tests/build pass
+
+## Next Candidate Plans
+
+### 1. Waiting Room And Rematch Polish
+
+Scope:
+
+- show player slots with ready and bot labels
+- add clearer "ready for next round" prompt after round end
+- expose room capacity in the lobby panel
+
+### 2. Real Asset Pipeline
+
+Scope:
+
+- replace generated textures with sprite sheets or licensed asset packs
+- add a manifest-driven preload stage
+- add 4-direction player idle/walk animation
+
+### 3. Reconnect Grace
+
+Scope:
+
+- keep a disconnected player slot for a short grace period
+- allow refresh or reconnect to reclaim the same player within one room
+- clean up stale slots after timeout
+
+### 4. Map Voting
+
+Scope:
+
+- show current arena and alternatives before ready
+- allow players to vote while match is waiting
+- lock selected arena when countdown starts
 
 ## Asset And UI/UX Upgrade Strategy
 
