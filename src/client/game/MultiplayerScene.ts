@@ -84,6 +84,7 @@ export class MultiplayerScene extends Phaser.Scene {
   private selfId: string | null = null;
   private localAvatar?: Avatar;
   private spectatorFollowId: string | null = null;
+  private lastExplosionFeedbackAt = 0;
   private lastDirection: Direction = "down";
   private sequence = 0;
   private lastInputState: PlayerInputPayload = {
@@ -366,12 +367,17 @@ export class MultiplayerScene extends Phaser.Scene {
       return;
     }
 
+    const wasAlive = avatar.state.alive;
     avatar.targetX = payload.pixelX;
     avatar.targetY = payload.pixelY;
     avatar.state = {
       ...avatar.state,
       ...payload
     };
+
+    if (wasAlive && !avatar.state.alive) {
+      this.showKoEffect(avatar);
+    }
   }
 
   private handleBombPlaced(payload: BombPlacedPayload) {
@@ -420,6 +426,7 @@ export class MultiplayerScene extends Phaser.Scene {
       return;
     }
 
+    const wasAlive = this.localAvatar.state.alive;
     const deltaX = payload.pixelX - this.localAvatar.root.x;
     const deltaY = payload.pixelY - this.localAvatar.root.y;
     const distance = Math.hypot(deltaX, deltaY);
@@ -442,6 +449,10 @@ export class MultiplayerScene extends Phaser.Scene {
       tileX: Math.floor(this.localAvatar.root.x / TILE_SIZE),
       tileY: Math.floor(this.localAvatar.root.y / TILE_SIZE)
     };
+
+    if (wasAlive && !this.localAvatar.state.alive) {
+      this.showKoEffect(this.localAvatar);
+    }
   }
 
   private syncPlayerCount() {
@@ -537,6 +548,24 @@ export class MultiplayerScene extends Phaser.Scene {
 
     const root = this.add.container(bomb.tileX * TILE_SIZE + TILE_SIZE / 2, bomb.tileY * TILE_SIZE + TILE_SIZE / 2, [body, fuse]);
     root.setDepth(10);
+    root.setScale(0.82);
+
+    this.tweens.add({
+      targets: root,
+      scale: 1,
+      duration: 130,
+      ease: "Back.easeOut"
+    });
+
+    this.tweens.add({
+      targets: root,
+      scaleX: 1.08,
+      scaleY: 1.08,
+      duration: 280,
+      yoyo: true,
+      repeat: -1,
+      ease: "Sine.easeInOut"
+    });
 
     return {
       root,
@@ -562,6 +591,23 @@ export class MultiplayerScene extends Phaser.Scene {
     );
     root.setStrokeStyle(3, 0xfef08a, 1);
     root.setDepth(9);
+    root.setScale(0.4);
+
+    this.playExplosionFeedback();
+    this.tweens.add({
+      targets: root,
+      scale: 1,
+      duration: 120,
+      ease: "Back.easeOut"
+    });
+    this.tweens.add({
+      targets: root,
+      alpha: 0.45,
+      duration: 220,
+      yoyo: true,
+      repeat: -1,
+      ease: "Sine.easeInOut"
+    });
 
     return {
       root,
@@ -693,6 +739,61 @@ export class MultiplayerScene extends Phaser.Scene {
         popup.destroy();
       }
     });
+  }
+
+  private showKoEffect(avatar: Avatar) {
+    const ring = this.add.circle(avatar.root.x, avatar.root.y, 16, 0xf87171, 0.24);
+    ring.setStrokeStyle(4, 0xfca5a5, 0.95);
+    ring.setDepth(13);
+
+    const text = this.add.text(avatar.root.x, avatar.root.y - 34, "KO", {
+      fontFamily: "Arial",
+      fontSize: "22px",
+      color: "#fecaca",
+      stroke: "#450a0a",
+      strokeThickness: 5
+    });
+    text.setOrigin(0.5, 0.5);
+    text.setDepth(14);
+
+    this.tweens.add({
+      targets: ring,
+      radius: 34,
+      alpha: 0,
+      duration: 420,
+      ease: "Quad.easeOut",
+      onComplete: () => {
+        ring.destroy();
+      }
+    });
+
+    this.tweens.add({
+      targets: text,
+      y: text.y - 22,
+      alpha: 0,
+      duration: 620,
+      ease: "Quad.easeOut",
+      onComplete: () => {
+        text.destroy();
+      }
+    });
+  }
+
+  private playExplosionFeedback() {
+    const now = this.time.now;
+    if (now - this.lastExplosionFeedbackAt < 140) {
+      return;
+    }
+
+    this.lastExplosionFeedbackAt = now;
+
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      this.cameras.main.flash(90, 249, 115, 22, true);
+      return;
+    }
+
+    this.cameras.main.shake(130, 0.006);
+    this.cameras.main.flash(110, 249, 115, 22, true);
   }
 }
 
