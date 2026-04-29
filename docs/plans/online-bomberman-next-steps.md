@@ -9,10 +9,12 @@ Recommended next tracks:
 3. [Spectator, Ready, And Round UX V3](/Users/bjw/Documents/Codex/2026-04-27-new-chat/docs/plans/spectator-ready-and-round-ux-v3.md)
 4. [Visual And UX Polish V3](/Users/bjw/Documents/Codex/2026-04-27-new-chat/docs/plans/visual-and-ux-polish-v3.md)
 5. [Productization V3 Roadmap](/Users/bjw/Documents/Codex/2026-04-27-new-chat/docs/plans/productization-v3-roadmap.md)
+6. [Productization Execution Order](/Users/bjw/Documents/Codex/2026-04-27-new-chat/docs/plans/productization-execution-order.md)
 
 Recommended sequence:
 
-- do `PowerUp V2` first to expand core gameplay
-- choose between `Room And Match Structure` and `Spectator, Ready, And Round UX` next depending on whether the priority is architecture or player experience
-- do `Visual And UX Polish` after the gameplay and flow layers are stable enough to avoid reworking presentation repeatedly
-- use `Productization V3 Roadmap` to prioritize features that make the game easier to share, replay, and eventually harden for public demos
+- `PowerUp V2` is complete enough to serve as the current gameplay expansion baseline
+- `Room And Match Structure V3` is mostly complete; finish invite-link polish next
+- `Spectator, Ready, And Round UX V3` is mostly complete; continue with waiting-room and rematch polish later
+- use `Productization Execution Order` as the current source of truth for completed plans, remaining plans, and asset upgrade timing
+- use `Productization V3 Roadmap` for broader product direction and prioritization rationale
