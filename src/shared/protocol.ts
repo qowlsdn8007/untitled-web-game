@@ -183,6 +183,10 @@ export type PlayerReadyPayload = {
   ready: boolean;
 };
 
+export type RoomErrorPayload = {
+  message: string;
+};
+
 export type ServerToClientEvents = {
   "world:init": (payload: WorldInitPayload) => void;
   "world:updated": (payload: WorldUpdatedPayload) => void;
@@ -191,6 +195,7 @@ export type ServerToClientEvents = {
   "player:updated": (payload: PlayerUpdatedPayload) => void;
   "bomb:placed": (payload: BombPlacedPayload) => void;
   "player:left": (payload: PlayerLeftPayload) => void;
+  "room:error": (payload: RoomErrorPayload) => void;
 };
 
 export type ClientToServerEvents = {

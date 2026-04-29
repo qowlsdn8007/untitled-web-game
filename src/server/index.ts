@@ -17,6 +17,7 @@ import {
 import { canPlaceBomb, createBomb } from "./game/bombs.js";
 import { addBotPlayer, shouldBotTryPlaceBomb, updateBotInputs } from "./game/bots.js";
 import { resolveExplosions } from "./game/explosions.js";
+import { isWithinCooldown } from "./game/rateLimit.js";
 import { clearPendingStart, resetPlayerReadiness, setPlayerReady, syncMatchLifecycle } from "./game/match.js";
 import { emitMatchState } from "./game/match.js";
 import {
@@ -41,6 +42,9 @@ type InterServerEvents = Record<string, never>;
 type SocketData = {
   playerId?: string;
   roomId?: string;
+  lastInputAt?: number;
+  lastBombAt?: number;
+  lastBotAt?: number;
 };
 
 const app = express();
@@ -55,11 +59,14 @@ const roomStates: RoomRegistry = new Map();
 app.get("/health", (_req, res) => {
   const rooms = [...roomStates.values()];
   const totalPlayers = rooms.reduce((count, roomState) => count + roomState.players.size, 0);
+  const activeMatches = rooms.filter((roomState) => roomState.match.status === "running").length;
 
   res.json({
     ok: true,
     players: totalPlayers,
     rooms: roomStates.size,
+    activeMatches,
+    version: process.env.npm_package_version ?? "0.1.0",
     mapId: rooms[0]?.mapId ?? null
   });
 });
@@ -74,9 +81,18 @@ const io = new Server<ClientToServerEvents, ServerToClientEvents, InterServerEve
 
 io.on("connection", (socket) => {
   socket.on("player:join", (payload: JoinPayload) => {
+    if (socket.data.playerId) {
+      return;
+    }
+
     const { nickname } = payload;
     const normalizedRoomId = resolveJoinRoomId(roomStates, payload);
     const roomState = getOrCreateRoomState(roomStates, normalizedRoomId);
+    if (roomState.players.size >= MAX_PLAYERS) {
+      socket.emit("room:error", { message: "방이 가득 찼습니다. 다른 방 코드나 빠른 매치를 사용하세요." });
+      return;
+    }
+
     const player = createPlayerState(socket.id, sanitizeNickname(nickname), roomState.players.size);
 
     socket.join(normalizedRoomId);
@@ -112,6 +128,12 @@ io.on("connection", (socket) => {
   });
 
   socket.on("room:bot:add", () => {
+    const now = Date.now();
+    if (isWithinCooldown(socket.data.lastBotAt, now, 1000)) {
+      return;
+    }
+    socket.data.lastBotAt = now;
+
     const roomId = socket.data.roomId;
     if (!roomId) {
       return;
@@ -129,6 +151,12 @@ io.on("connection", (socket) => {
   });
 
   socket.on("player:input", (payload: PlayerInputPayload) => {
+    const now = Date.now();
+    if (isWithinCooldown(socket.data.lastInputAt, now, 30)) {
+      return;
+    }
+    socket.data.lastInputAt = now;
+
     const playerId = socket.data.playerId;
     const roomId = socket.data.roomId;
     if (!playerId) {
@@ -148,6 +176,12 @@ io.on("connection", (socket) => {
   });
 
   socket.on("bomb:place", () => {
+    const now = Date.now();
+    if (isWithinCooldown(socket.data.lastBombAt, now, 250)) {
+      return;
+    }
+    socket.data.lastBombAt = now;
+
     const playerId = socket.data.playerId;
     const roomId = socket.data.roomId;
     if (!playerId) {

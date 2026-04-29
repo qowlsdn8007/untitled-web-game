@@ -139,6 +139,10 @@ export default function App() {
       setReadyCount(nextReadyCount);
     });
 
+    socket.on("room:error", ({ message }) => {
+      setStatus(message);
+    });
+
     socket.on("player:updated", (payload) => {
       if (payload.id !== selfIdRef.current) {
         return;
