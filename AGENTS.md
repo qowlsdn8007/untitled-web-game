@@ -42,6 +42,7 @@ The project is currently demo-scale. Prefer solutions that are simple, maintaina
 - `websocket-engineer`
 - `clean-ddd-hexagonal`
 - `feature-sliced-design`
+- `conventional-commits-next`
 
 ## Core Behavior
 
@@ -106,6 +107,10 @@ Interpret it with project-scale judgment:
   `documentation-writer`
   See [documentation.md](/Users/bjw/Documents/Codex/2026-04-27-new-chat/docs/harness/documentation.md)
 
+- Commit messages, squash commit text, release bump reasoning, and commit history cleanup:
+  `conventional-commits-next`
+  See [version-control.md](/Users/bjw/Documents/Codex/2026-04-27-new-chat/docs/harness/version-control.md)
+
 - Skill discovery for new domains:
   `find-skills`
 
@@ -144,13 +149,16 @@ Use the minimum relevant sub-harness files for a task.
 - README or guide writing:
   [documentation.md](/Users/bjw/Documents/Codex/2026-04-27-new-chat/docs/harness/documentation.md)
 
+- Commit messages or release bump reasoning:
+  [version-control.md](/Users/bjw/Documents/Codex/2026-04-27-new-chat/docs/harness/version-control.md)
+
 ## Project Defaults
 
 - Keep React shell state separate from Phaser runtime state.
 - Keep client/server protocol types shared and centralized.
 - Prioritize local player responsiveness over aggressive self-correction.
 - Keep Render and Vercel compatibility intact.
-- Use Conventional Commits for commits.
+- Use `conventional-commits-next` for commits.
 
 ## Anti-Patterns
 

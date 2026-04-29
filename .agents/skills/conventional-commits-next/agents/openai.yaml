@@ -1,0 +1,4 @@
+interface:
+  display_name: "Conventional Commits Next"
+  short_description: "Draft-aware commit message guidance"
+  default_prompt: "Use $conventional-commits-next to write a Conventional Commits 1.0.0-next commit message."
