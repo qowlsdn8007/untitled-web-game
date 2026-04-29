@@ -19,6 +19,7 @@ import {
   type WorldUpdatedPayload,
   type WorldInitPayload
 } from "../../shared/protocol";
+import { createGeneratedGameTextures, GAME_ASSETS, getPlayerTexture, getPowerUpTexture } from "./assets";
 import { drawMap } from "./map";
 import type { GameSocket } from "../network/gameSocket";
 
@@ -33,7 +34,7 @@ type SceneOptions = {
 
 type Avatar = {
   root: Phaser.GameObjects.Container;
-  sprite: Phaser.GameObjects.Rectangle;
+  sprite: Phaser.GameObjects.Image;
   label: Phaser.GameObjects.Text;
   state: PlayerState;
   targetX: number;
@@ -42,19 +43,18 @@ type Avatar = {
 
 type BombView = {
   root: Phaser.GameObjects.Container;
-  body: Phaser.GameObjects.Arc;
-  fuse: Phaser.GameObjects.Rectangle;
+  sprite: Phaser.GameObjects.Image;
   state: BombState;
 };
 
 type FlameView = {
-  root: Phaser.GameObjects.Rectangle;
+  root: Phaser.GameObjects.Image;
   state: FlameState;
 };
 
 type PowerUpView = {
   root: Phaser.GameObjects.Container;
-  marker: Phaser.GameObjects.Rectangle;
+  marker: Phaser.GameObjects.Image;
   label: Phaser.GameObjects.Text;
   state: PowerUpState;
 };
@@ -117,6 +117,7 @@ export class MultiplayerScene extends Phaser.Scene {
   }
 
   create() {
+    createGeneratedGameTextures(this);
     this.mapGraphics = this.add.graphics();
     drawMap(this.mapGraphics, this.currentGrid);
 
@@ -257,8 +258,8 @@ export class MultiplayerScene extends Phaser.Scene {
   }
 
   private createAvatar(player: PlayerState, isLocal: boolean): Avatar {
-    const sprite = this.add.rectangle(0, 0, PLAYER_SIZE, PLAYER_SIZE, isLocal ? 0xf59e0b : 0x38bdf8, 1);
-    sprite.setStrokeStyle(3, isLocal ? 0xfef3c7 : 0xe0f2fe, 1);
+    const sprite = this.add.image(0, 0, getPlayerTexture(isLocal, player.alive, player.moving));
+    sprite.setDisplaySize(PLAYER_SIZE + 4, PLAYER_SIZE + 4);
 
     const label = this.add.text(0, -28, player.nickname, {
       fontFamily: "Arial",
@@ -317,7 +318,7 @@ export class MultiplayerScene extends Phaser.Scene {
 
     this.lastDirection = direction;
     this.localAvatar.state.direction = direction;
-    this.localAvatar.sprite.setFillStyle(moving ? 0xfb923c : 0xf59e0b, 1);
+    this.localAvatar.sprite.setTexture(getPlayerTexture(true, this.localAvatar.state.alive, moving));
     this.localAvatar.label.setText(`${this.nickname}${moving ? " · move" : ""}`);
 
     if (this.lastInputState.direction === direction && this.lastInputState.moving === moving) {
@@ -341,7 +342,7 @@ export class MultiplayerScene extends Phaser.Scene {
       const localX = Phaser.Math.Linear(this.localAvatar.root.x, this.localAvatar.targetX, easing);
       const localY = Phaser.Math.Linear(this.localAvatar.root.y, this.localAvatar.targetY, easing);
       this.localAvatar.root.setPosition(localX, localY);
-      this.localAvatar.sprite.setFillStyle(this.localAvatar.state.alive ? 0xf59e0b : 0x7f1d1d, 1);
+      this.localAvatar.sprite.setTexture(getPlayerTexture(true, this.localAvatar.state.alive, this.localAvatar.state.moving));
       this.localAvatar.label.setText(this.formatAvatarLabel(this.localAvatar.state, true));
     }
 
@@ -349,7 +350,7 @@ export class MultiplayerScene extends Phaser.Scene {
       const x = Phaser.Math.Linear(avatar.root.x, avatar.targetX, easing);
       const y = Phaser.Math.Linear(avatar.root.y, avatar.targetY, easing);
       avatar.root.setPosition(x, y);
-      avatar.sprite.setFillStyle(avatar.state.alive ? (avatar.state.moving ? 0x7dd3fc : 0x38bdf8) : 0x334155, 1);
+      avatar.sprite.setTexture(getPlayerTexture(false, avatar.state.alive, avatar.state.moving));
       avatar.label.setText(this.formatAvatarLabel(avatar.state, false));
     });
 
@@ -475,7 +476,7 @@ export class MultiplayerScene extends Phaser.Scene {
     }
 
     this.localAvatar.state.moving = false;
-    this.localAvatar.sprite.setFillStyle(0xf59e0b, 1);
+    this.localAvatar.sprite.setTexture(getPlayerTexture(true, this.localAvatar.state.alive, false));
     this.localAvatar.label.setText(this.nickname);
     this.sequence += 1;
 
@@ -540,13 +541,8 @@ export class MultiplayerScene extends Phaser.Scene {
   }
 
   private createBombView(bomb: BombState): BombView {
-    const body = this.add.circle(0, 4, 14, 0x111827, 1);
-    body.setStrokeStyle(3, 0x94a3b8, 1);
-
-    const fuse = this.add.rectangle(0, -10, 6, 10, 0xf59e0b, 1);
-    fuse.setStrokeStyle(2, 0xfef3c7, 1);
-
-    const root = this.add.container(bomb.tileX * TILE_SIZE + TILE_SIZE / 2, bomb.tileY * TILE_SIZE + TILE_SIZE / 2, [body, fuse]);
+    const sprite = this.add.image(0, 0, GAME_ASSETS.bomb);
+    const root = this.add.container(bomb.tileX * TILE_SIZE + TILE_SIZE / 2, bomb.tileY * TILE_SIZE + TILE_SIZE / 2, [sprite]);
     root.setDepth(10);
     root.setScale(0.82);
 
@@ -569,8 +565,7 @@ export class MultiplayerScene extends Phaser.Scene {
 
     return {
       root,
-      body,
-      fuse,
+      sprite,
       state: { ...bomb }
     };
   }
@@ -581,15 +576,11 @@ export class MultiplayerScene extends Phaser.Scene {
   }
 
   private createFlameView(flame: FlameState): FlameView {
-    const root = this.add.rectangle(
+    const root = this.add.image(
       flame.tileX * TILE_SIZE + TILE_SIZE / 2,
       flame.tileY * TILE_SIZE + TILE_SIZE / 2,
-      TILE_SIZE - 10,
-      TILE_SIZE - 10,
-      0xf97316,
-      0.8
+      GAME_ASSETS.flame
     );
-    root.setStrokeStyle(3, 0xfef08a, 1);
     root.setDepth(9);
     root.setScale(0.4);
 
@@ -621,10 +612,8 @@ export class MultiplayerScene extends Phaser.Scene {
   }
 
   private createPowerUpView(powerUp: PowerUpState): PowerUpView {
-    const { fillColor, text } = getPowerUpVisual(powerUp.type);
-    const marker = this.add.rectangle(0, 0, 22, 22, fillColor, 1);
-    marker.setStrokeStyle(2, 0xf8fafc, 0.8);
-    const label = this.add.text(0, 0, text, {
+    const marker = this.add.image(0, 0, getPowerUpTexture(powerUp.type));
+    const label = this.add.text(0, -1, getPowerUpVisual(powerUp.type).text, {
       fontFamily: "Arial",
       fontSize: "13px",
       color: "#f8fafc",
@@ -633,7 +622,10 @@ export class MultiplayerScene extends Phaser.Scene {
     });
     label.setOrigin(0.5, 0.5);
 
-    const root = this.add.container(powerUp.tileX * TILE_SIZE + TILE_SIZE / 2, powerUp.tileY * TILE_SIZE + TILE_SIZE / 2, [marker, label]);
+    const root = this.add.container(powerUp.tileX * TILE_SIZE + TILE_SIZE / 2, powerUp.tileY * TILE_SIZE + TILE_SIZE / 2, [
+      marker,
+      label
+    ]);
     root.setDepth(8);
 
     return {
