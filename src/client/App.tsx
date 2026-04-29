@@ -2,7 +2,15 @@ import { useEffect, useRef, useState } from "react";
 import Phaser from "phaser";
 import { MultiplayerScene } from "./game/MultiplayerScene";
 import { createGameSocket, type GameSocket } from "./network/gameSocket";
-import { MAP_HEIGHT, MAP_WIDTH, TILE_SIZE, type JoinMode, type MatchState, type PlayerState } from "../shared/protocol";
+import {
+  MAP_HEIGHT,
+  MAP_WIDTH,
+  MATCH_START_DELAY_MS,
+  TILE_SIZE,
+  type JoinMode,
+  type MatchState,
+  type PlayerState
+} from "../shared/protocol";
 
 const GAME_WIDTH = MAP_WIDTH * TILE_SIZE;
 const GAME_HEIGHT = MAP_HEIGHT * TILE_SIZE;
@@ -24,6 +32,7 @@ export default function App() {
   const [match, setMatch] = useState<MatchState | null>(null);
   const [selfPlayer, setSelfPlayer] = useState<PlayerState | null>(null);
   const [currentRoomId, setCurrentRoomId] = useState<string | null>(null);
+  const [nowMs, setNowMs] = useState(() => Date.now());
 
   useEffect(() => {
     if (!submittedNickname || !submittedRoomCode) {
@@ -32,6 +41,18 @@ export default function App() {
 
     setStatus(describeStatus(isConnected, match));
   }, [isConnected, match, submittedNickname, submittedRoomCode]);
+
+  useEffect(() => {
+    if (match?.status !== "starting") {
+      return;
+    }
+
+    const timer = window.setInterval(() => {
+      setNowMs(Date.now());
+    }, 200);
+
+    return () => window.clearInterval(timer);
+  }, [match?.status]);
 
   useEffect(() => {
     if (!submittedNickname || !submittedRoomCode || !containerRef.current) {
@@ -178,6 +199,8 @@ export default function App() {
     socketRef.current?.emit("player:ready", { ready: !selfPlayer.ready });
   };
 
+  const roundOverlay = getRoundOverlay(match, selfPlayer, selfIdRef.current, nowMs);
+
   return (
     <main className="app-shell">
       <section className="hero-panel">
@@ -289,6 +312,12 @@ export default function App() {
               <span>Power-Ups: B / F / S</span>
             </div>
           ) : null}
+          {roundOverlay ? (
+            <div className={`round-overlay ${roundOverlay.tone}`}>
+              <strong>{roundOverlay.title}</strong>
+              <span>{roundOverlay.description}</span>
+            </div>
+          ) : null}
           {!submittedNickname ? (
             <div className="canvas-overlay">닉네임을 입력하면 이곳에 멀티플레이 맵이 열립니다.</div>
           ) : null}
@@ -305,6 +334,39 @@ function normalizeRoomCode(value: string) {
 
 function canToggleReady(match: MatchState | null) {
   return !match || match.status === "waiting" || match.status === "starting";
+}
+
+function getRoundOverlay(match: MatchState | null, selfPlayer: PlayerState | null, selfId: string | null, nowMs: number) {
+  if (!match) {
+    return null;
+  }
+
+  if (match.status === "starting" && match.countdownStartedAt) {
+    const remainingMs = Math.max(0, MATCH_START_DELAY_MS - (nowMs - match.countdownStartedAt));
+    return {
+      tone: "countdown",
+      title: `${Math.max(1, Math.ceil(remainingMs / 1000))}`,
+      description: "라운드 시작 준비"
+    };
+  }
+
+  if (match.status === "running" && selfPlayer && !selfPlayer.alive) {
+    return {
+      tone: "spectator",
+      title: "KO",
+      description: "이번 라운드는 관전 모드입니다."
+    };
+  }
+
+  if (match.status === "finished") {
+    return {
+      tone: match.winnerId === selfId ? "victory" : "result",
+      title: formatRoundResult(match, selfId),
+      description: "다음 라운드 준비 단계로 돌아갑니다."
+    };
+  }
+
+  return null;
 }
 
 function formatMatchStatus(status: MatchState["status"] | undefined) {
