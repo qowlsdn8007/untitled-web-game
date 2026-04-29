@@ -44,6 +44,7 @@ export const SPAWN_POINT = {
 export type PlayerState = {
   id: string;
   nickname: string;
+  ready: boolean;
   tileX: number;
   tileY: number;
   pixelX: number;
@@ -151,10 +152,12 @@ export type MatchStatePayload = {
   roomId: string;
   match: MatchState;
   playerCount: number;
+  readyCount: number;
 };
 
 export type PlayerUpdatedPayload = {
   id: string;
+  ready: boolean;
   tileX: number;
   tileY: number;
   pixelX: number;
@@ -172,6 +175,10 @@ export type PlayerLeftPayload = {
   id: string;
 };
 
+export type PlayerReadyPayload = {
+  ready: boolean;
+};
+
 export type ServerToClientEvents = {
   "world:init": (payload: WorldInitPayload) => void;
   "world:updated": (payload: WorldUpdatedPayload) => void;
@@ -185,6 +192,7 @@ export type ServerToClientEvents = {
 export type ClientToServerEvents = {
   "player:join": (payload: JoinPayload) => void;
   "player:input": (payload: PlayerInputPayload) => void;
+  "player:ready": (payload: PlayerReadyPayload) => void;
   "bomb:place": () => void;
 };
 

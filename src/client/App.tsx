@@ -19,6 +19,7 @@ export default function App() {
   const [submittedJoinMode, setSubmittedJoinMode] = useState<JoinMode>("room");
   const [isConnected, setIsConnected] = useState(false);
   const [playerCount, setPlayerCount] = useState(0);
+  const [readyCount, setReadyCount] = useState(0);
   const [status, setStatus] = useState("닉네임을 입력하고 맵에 입장하세요.");
   const [match, setMatch] = useState<MatchState | null>(null);
   const [selfPlayer, setSelfPlayer] = useState<PlayerState | null>(null);
@@ -45,13 +46,15 @@ export default function App() {
       setCurrentRoomId(payload.roomId);
       setMatch(payload.match);
       setPlayerCount(payload.players.length);
+      setReadyCount(payload.players.filter((player) => player.ready).length);
       const nextSelfPlayer = payload.players.find((player) => player.id === payload.selfId) ?? null;
       setSelfPlayer(nextSelfPlayer);
     });
 
-    socket.on("match:state", ({ match: nextMatch, playerCount: nextPlayerCount }) => {
+    socket.on("match:state", ({ match: nextMatch, playerCount: nextPlayerCount, readyCount: nextReadyCount }) => {
       setMatch(nextMatch);
       setPlayerCount(nextPlayerCount);
+      setReadyCount(nextReadyCount);
     });
 
     socket.on("player:updated", (payload) => {
@@ -133,6 +136,7 @@ export default function App() {
       socketRef.current = null;
       selfIdRef.current = null;
       setCurrentRoomId(null);
+      setReadyCount(0);
       game.destroy(true);
       gameRef.current = null;
     };
@@ -164,6 +168,14 @@ export default function App() {
     setSubmittedRoomCode("quick");
     setSubmittedJoinMode("quick");
     setStatus("빠른 매치를 찾는 중입니다...");
+  };
+
+  const handleReadyToggle = () => {
+    if (!selfPlayer || !canToggleReady(match)) {
+      return;
+    }
+
+    socketRef.current?.emit("player:ready", { ready: !selfPlayer.ready });
   };
 
   return (
@@ -221,6 +233,12 @@ export default function App() {
             <dd>{playerCount}</dd>
           </div>
           <div>
+            <dt>준비</dt>
+            <dd>
+              {readyCount} / {playerCount}
+            </dd>
+          </div>
+          <div>
             <dt>방 코드</dt>
             <dd>{currentRoomId ?? "-"}</dd>
           </div>
@@ -253,6 +271,12 @@ export default function App() {
             <dd>{formatRoundResult(match, selfIdRef.current)}</dd>
           </div>
         </dl>
+
+        {submittedNickname ? (
+          <button className="ready-action" type="button" onClick={handleReadyToggle} disabled={!isConnected || !canToggleReady(match)}>
+            {selfPlayer?.ready ? "준비 취소" : "Ready"}
+          </button>
+        ) : null}
       </section>
 
       <section className="game-panel">
@@ -277,6 +301,10 @@ export default function App() {
 function normalizeRoomCode(value: string) {
   const trimmed = value.trim().toLowerCase().slice(0, 24);
   return trimmed.length > 0 ? trimmed : "public-1";
+}
+
+function canToggleReady(match: MatchState | null) {
+  return !match || match.status === "waiting" || match.status === "starting";
 }
 
 function formatMatchStatus(status: MatchState["status"] | undefined) {

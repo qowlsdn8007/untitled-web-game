@@ -121,6 +121,7 @@ function createPlayer(overrides: Partial<PlayerState> = {}): PlayerState {
   return {
     id: "player-1",
     nickname: "tester",
+    ready: false,
     tileX: 1,
     tileY: 1,
     pixelX: tileToPixelCenter(1),

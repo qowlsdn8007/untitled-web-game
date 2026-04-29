@@ -234,6 +234,7 @@ export class MultiplayerScene extends Phaser.Scene {
       const fallbackState: PlayerState = {
         id: payload.selfId,
         nickname: this.nickname,
+        ready: false,
         tileX: 1,
         tileY: 1,
         pixelX: SPAWN_POINT.x,

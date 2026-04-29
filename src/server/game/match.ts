@@ -1,4 +1,11 @@
-import { MATCH_START_DELAY_MS, MIN_PLAYERS_TO_START, type MatchStatePayload, type ServerToClientEvents } from "../../shared/protocol.js";
+import {
+  MATCH_START_DELAY_MS,
+  MIN_PLAYERS_TO_START,
+  type MatchStatePayload,
+  type MatchStatus,
+  type PlayerState,
+  type ServerToClientEvents
+} from "../../shared/protocol.js";
 import type { Server } from "socket.io";
 import {
   createRunningMatchState,
@@ -17,7 +24,7 @@ export function syncMatchLifecycle(
   state: GameState,
   roomId: string
 ) {
-  if (state.players.size < MIN_PLAYERS_TO_START) {
+  if (!canStartMatch(state.players.values())) {
     clearPendingStart(state);
     state.match = {
       ...state.match,
@@ -67,6 +74,31 @@ function createMatchPayload(state: GameState, roomId: string): MatchStatePayload
   return {
     roomId,
     match: { ...state.match },
-    playerCount: state.players.size
+    playerCount: state.players.size,
+    readyCount: countReadyPlayers(state.players.values())
   };
+}
+
+export function canStartMatch(players: Iterable<PlayerState>): boolean {
+  const playerList = [...players];
+  return playerList.length >= MIN_PLAYERS_TO_START && playerList.every((player) => player.ready);
+}
+
+export function countReadyPlayers(players: Iterable<PlayerState>): number {
+  return [...players].filter((player) => player.ready).length;
+}
+
+export function setPlayerReady(player: PlayerState, ready: boolean, matchStatus: MatchStatus): boolean {
+  if (matchStatus === "running" || matchStatus === "finished") {
+    return false;
+  }
+
+  player.ready = ready;
+  return true;
+}
+
+export function resetPlayerReadiness(players: Iterable<PlayerState>): void {
+  [...players].forEach((player) => {
+    player.ready = false;
+  });
 }

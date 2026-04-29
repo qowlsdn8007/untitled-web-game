@@ -3,7 +3,6 @@ import cors from "cors";
 import { createServer } from "node:http";
 import { Server } from "socket.io";
 import {
-  MIN_PLAYERS_TO_START,
   ROUND_RESTART_DELAY_MS,
   SERVER_TICK_MS,
   type BombPlacedPayload,
@@ -16,12 +15,11 @@ import {
 } from "../shared/protocol.js";
 import { canPlaceBomb, createBomb } from "./game/bombs.js";
 import { resolveExplosions } from "./game/explosions.js";
-import { clearPendingStart, syncMatchLifecycle } from "./game/match.js";
+import { clearPendingStart, resetPlayerReadiness, setPlayerReady, syncMatchLifecycle } from "./game/match.js";
 import { emitMatchState } from "./game/match.js";
 import {
   createFinishedMatchState,
   createPlayerState,
-  createRunningMatchState,
   createWaitingMatchState,
   createWorldSnapshot,
   type GameState,
@@ -88,6 +86,27 @@ io.on("connection", (socket) => {
     socket.to(normalizedRoomId).emit("player:joined", player);
 
     syncMatchLifecycle(io, roomState, normalizedRoomId);
+  });
+
+  socket.on("player:ready", ({ ready }) => {
+    const playerId = socket.data.playerId;
+    const roomId = socket.data.roomId;
+    if (!playerId || !roomId) {
+      return;
+    }
+
+    const roomState = roomStates.get(roomId);
+    const player = roomState?.players.get(playerId);
+    if (!roomState || !player) {
+      return;
+    }
+
+    if (!setPlayerReady(player, ready, roomState.match.status)) {
+      return;
+    }
+
+    io.to(roomId).emit("player:updated", toPlayerUpdatedPayload(player));
+    syncMatchLifecycle(io, roomState, roomId);
   });
 
   socket.on("player:input", (payload: PlayerInputPayload) => {
@@ -237,6 +256,7 @@ function sanitizeNickname(nickname: string): string {
 function toPlayerUpdatedPayload(player: import("../shared/protocol.js").PlayerState): PlayerUpdatedPayload {
   return {
     id: player.id,
+    ready: player.ready,
     tileX: player.tileX,
     tileY: player.tileY,
     pixelX: player.pixelX,
@@ -279,12 +299,8 @@ function finishRound(roomId: string, roomState: GameState, winnerId: string | nu
   roomState.pendingRestartTimer = setTimeout(() => {
     roomState.pendingRestartTimer = null;
     resetRoundState(roomState);
-
-    if (roomState.players.size < MIN_PLAYERS_TO_START) {
-      roomState.match = createWaitingMatchState(roomState.match.round + 1);
-    } else {
-      roomState.match = createRunningMatchState(roomState.match.round + 1, Date.now());
-    }
+    resetPlayerReadiness(roomState.players.values());
+    roomState.match = createWaitingMatchState(roomState.match.round + 1);
 
     emitMatchState(io, roomState, roomId);
     emitWorldState(roomId, roomState);

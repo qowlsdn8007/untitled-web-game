@@ -136,6 +136,23 @@ input {
   color: #f8fafc;
 }
 
+.ready-action {
+  width: 100%;
+  padding: 15px 18px;
+  border: 0;
+  border-radius: 18px;
+  background: linear-gradient(135deg, #22c55e, #14b8a6);
+  color: #ecfdf5;
+  font-weight: 800;
+  cursor: pointer;
+  box-shadow: 0 14px 34px rgba(20, 184, 166, 0.16);
+}
+
+.ready-action:disabled {
+  cursor: default;
+  opacity: 0.58;
+}
+
 .game-panel {
   padding: 18px;
   display: flex;

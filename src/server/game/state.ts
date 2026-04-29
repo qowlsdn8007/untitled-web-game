@@ -49,6 +49,7 @@ export function createPlayerState(id: string, nickname: string, playerIndex: num
   return {
     id,
     nickname,
+    ready: false,
     tileX: spawn.tileX,
     tileY: spawn.tileY,
     pixelX: tileToPixelCenter(spawn.tileX),
