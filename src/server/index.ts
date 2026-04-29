@@ -5,6 +5,7 @@ import { Server } from "socket.io";
 import {
   ROUND_RESTART_DELAY_MS,
   SERVER_TICK_MS,
+  MAX_PLAYERS,
   type BombPlacedPayload,
   type ClientToServerEvents,
   type JoinPayload,
@@ -14,6 +15,7 @@ import {
   type WorldUpdatedPayload
 } from "../shared/protocol.js";
 import { canPlaceBomb, createBomb } from "./game/bombs.js";
+import { addBotPlayer, shouldBotTryPlaceBomb, updateBotInputs } from "./game/bots.js";
 import { resolveExplosions } from "./game/explosions.js";
 import { clearPendingStart, resetPlayerReadiness, setPlayerReady, syncMatchLifecycle } from "./game/match.js";
 import { emitMatchState } from "./game/match.js";
@@ -109,6 +111,23 @@ io.on("connection", (socket) => {
     syncMatchLifecycle(io, roomState, roomId);
   });
 
+  socket.on("room:bot:add", () => {
+    const roomId = socket.data.roomId;
+    if (!roomId) {
+      return;
+    }
+
+    const roomState = roomStates.get(roomId);
+    if (!roomState || roomState.players.size >= MAX_PLAYERS || roomState.match.status === "running") {
+      return;
+    }
+
+    const bot = addBotPlayer(roomState, roomId);
+    io.to(roomId).emit("player:joined", bot);
+    io.to(roomId).emit("player:updated", toPlayerUpdatedPayload(bot));
+    syncMatchLifecycle(io, roomState, roomId);
+  });
+
   socket.on("player:input", (payload: PlayerInputPayload) => {
     const playerId = socket.data.playerId;
     const roomId = socket.data.roomId;
@@ -191,16 +210,26 @@ const tickTimer = setInterval(() => {
       return;
     }
 
+    const now = Date.now();
+    updateBotInputs(roomState, now);
+
     roomState.players.forEach((player, playerId) => {
       const input = roomState.playerInputs.get(playerId);
       const nextState = stepPlayerMovement(player, input, roomState.grid, roomState.bombs.values(), SERVER_TICK_MS);
 
-      if (!didPlayerChange(player, nextState)) {
-        return;
+      if (didPlayerChange(player, nextState)) {
+        roomState.players.set(playerId, nextState);
+        io.to(roomId).emit("player:updated", toPlayerUpdatedPayload(nextState));
       }
 
-      roomState.players.set(playerId, nextState);
-      io.to(roomId).emit("player:updated", toPlayerUpdatedPayload(nextState));
+      if (shouldBotTryPlaceBomb(playerId, now) && canPlaceBomb(nextState, roomState.grid, roomState.bombs.values(), roomState.match.status)) {
+        const bomb = createBomb(playerId, nextState, now);
+        roomState.bombs.set(bomb.id, bomb);
+        nextState.activeBombs += 1;
+        roomState.players.set(playerId, nextState);
+        io.to(roomId).emit("bomb:placed", toBombPlacedPayload(bomb, nextState));
+        io.to(roomId).emit("player:updated", toPlayerUpdatedPayload(nextState));
+      }
     });
 
     const collectedPowerUps = collectPowerUps(roomState.players.values(), roomState.powerUps);

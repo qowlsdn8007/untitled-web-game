@@ -45,6 +45,7 @@ export const SPAWN_POINT = {
 export type PlayerState = {
   id: string;
   nickname: string;
+  isBot: boolean;
   ready: boolean;
   tileX: number;
   tileY: number;
@@ -196,6 +197,7 @@ export type ClientToServerEvents = {
   "player:join": (payload: JoinPayload) => void;
   "player:input": (payload: PlayerInputPayload) => void;
   "player:ready": (payload: PlayerReadyPayload) => void;
+  "room:bot:add": () => void;
   "bomb:place": () => void;
 };
 

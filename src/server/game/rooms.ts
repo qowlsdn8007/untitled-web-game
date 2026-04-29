@@ -1,5 +1,6 @@
 import { MAX_PLAYERS, type JoinPayload } from "../../shared/protocol.js";
 import { selectArenaIdForRoom } from "../../shared/map.js";
+import { hasHumanPlayers } from "./bots.js";
 import { createInitialGameState, type GameState } from "./state.js";
 
 export type RoomRegistry = Map<string, GameState>;
@@ -25,7 +26,7 @@ export function getOrCreateRoomState(roomStates: RoomRegistry, roomId: string): 
 
 export function cleanupRoomIfEmpty(roomStates: RoomRegistry, roomId: string, onCleanup: (roomState: GameState) => void): boolean {
   const roomState = roomStates.get(roomId);
-  if (!roomState || roomState.players.size > 0) {
+  if (!roomState || hasHumanPlayers(roomState)) {
     return false;
   }
 

@@ -204,19 +204,36 @@ input {
   font-size: 1rem;
 }
 
-.ready-action {
+.match-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.ready-action,
+.bot-action {
   width: 100%;
   padding: 15px 18px;
   border: 0;
   border-radius: 18px;
-  background: linear-gradient(135deg, #22c55e, #14b8a6);
-  color: #ecfdf5;
   font-weight: 800;
   cursor: pointer;
+}
+
+.ready-action {
+  background: linear-gradient(135deg, #22c55e, #14b8a6);
+  color: #ecfdf5;
   box-shadow: 0 14px 34px rgba(20, 184, 166, 0.16);
 }
 
-.ready-action:disabled {
+.bot-action {
+  background: linear-gradient(135deg, #f97316, #f59e0b);
+  color: #fff7ed;
+  box-shadow: 0 14px 34px rgba(249, 115, 22, 0.14);
+}
+
+.ready-action:disabled,
+.bot-action:disabled {
   cursor: default;
   opacity: 0.58;
 }

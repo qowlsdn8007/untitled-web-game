@@ -276,6 +276,10 @@ export default function App() {
     socketRef.current?.emit("player:ready", { ready: !selfPlayer.ready });
   };
 
+  const handleAddBot = () => {
+    socketRef.current?.emit("room:bot:add");
+  };
+
   const handleCopyInviteLink = async () => {
     const inviteRoomId = currentRoomId ?? normalizeRoomCode(roomCode);
     const inviteUrl = createInviteUrl(inviteRoomId);
@@ -418,9 +422,14 @@ export default function App() {
         </section>
 
         {submittedNickname ? (
-          <button className="ready-action" type="button" onClick={handleReadyToggle} disabled={!isConnected || !canToggleReady(match)}>
-            {selfPlayer?.ready ? "준비 취소" : "Ready"}
-          </button>
+          <div className="match-actions">
+            <button className="ready-action" type="button" onClick={handleReadyToggle} disabled={!isConnected || !canToggleReady(match)}>
+              {selfPlayer?.ready ? "준비 취소" : "Ready"}
+            </button>
+            <button className="bot-action" type="button" onClick={handleAddBot} disabled={!isConnected || match?.status === "running"}>
+              봇 추가
+            </button>
+          </div>
         ) : null}
       </section>
 

@@ -56,6 +56,7 @@ function createPlayer(overrides: Partial<PlayerState> = {}): PlayerState {
   return {
     id: "player-1",
     nickname: "tester",
+    isBot: false,
     ready: false,
     tileX: 1,
     tileY: 1,

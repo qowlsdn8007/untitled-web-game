@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { MAX_PLAYERS } from "../../shared/protocol.js";
 import { createPlayerState } from "./state.js";
+import { addBotPlayer } from "./bots.js";
 import {
   cleanupRoomIfEmpty,
   getOrCreateRoomState,
@@ -53,4 +54,13 @@ test("cleanup removes only empty rooms", () => {
   assert.equal(rooms.has("occupied"), true);
   assert.equal(rooms.has("empty"), false);
   assert.equal(cleanupCount, 1);
+});
+
+test("cleanup removes rooms that only contain bot players", () => {
+  const rooms: RoomRegistry = new Map();
+  const botOnlyRoom = getOrCreateRoomState(rooms, "bot-only");
+  addBotPlayer(botOnlyRoom, "bot-only", 1000);
+
+  assert.equal(cleanupRoomIfEmpty(rooms, "bot-only", () => undefined), true);
+  assert.equal(rooms.has("bot-only"), false);
 });

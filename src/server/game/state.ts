@@ -23,6 +23,7 @@ export type GameState = {
   grid: TileType[][];
   players: Map<string, PlayerState>;
   playerInputs: Map<string, PlayerInputState>;
+  botDecisions: Map<string, number>;
   bombs: Map<string, BombState>;
   flames: FlameState[];
   powerUps: Map<string, PowerUpState>;
@@ -41,6 +42,7 @@ export function createInitialGameState(arenaId: ArenaId = DEFAULT_ARENA_ID): Gam
     grid: createRoundGrid(arena.id),
     players: new Map<string, PlayerState>(),
     playerInputs: new Map<string, PlayerInputState>(),
+    botDecisions: new Map<string, number>(),
     bombs: new Map<string, BombState>(),
     flames: [],
     powerUps: new Map<string, PowerUpState>(),
@@ -50,12 +52,13 @@ export function createInitialGameState(arenaId: ArenaId = DEFAULT_ARENA_ID): Gam
   };
 }
 
-export function createPlayerState(id: string, nickname: string, playerIndex: number): PlayerState {
+export function createPlayerState(id: string, nickname: string, playerIndex: number, isBot = false): PlayerState {
   const spawn = SPAWN_TILES[playerIndex % SPAWN_TILES.length];
 
   return {
     id,
     nickname,
+    isBot,
     ready: false,
     tileX: spawn.tileX,
     tileY: spawn.tileY,
@@ -121,6 +124,7 @@ export function resetRoundState(state: GameState): void {
   state.flames = [];
   state.powerUps.clear();
   state.playerInputs.clear();
+  state.botDecisions.clear();
 
   const players = [...state.players.values()];
   players.forEach((player, index) => {
