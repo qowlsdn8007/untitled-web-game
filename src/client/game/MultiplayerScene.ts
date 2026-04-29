@@ -83,6 +83,7 @@ export class MultiplayerScene extends Phaser.Scene {
   );
   private selfId: string | null = null;
   private localAvatar?: Avatar;
+  private spectatorFollowId: string | null = null;
   private lastDirection: Direction = "down";
   private sequence = 0;
   private lastInputState: PlayerInputPayload = {
@@ -350,6 +351,8 @@ export class MultiplayerScene extends Phaser.Scene {
       avatar.sprite.setFillStyle(avatar.state.alive ? (avatar.state.moving ? 0x7dd3fc : 0x38bdf8) : 0x334155, 1);
       avatar.label.setText(this.formatAvatarLabel(avatar.state, false));
     });
+
+    this.updateCameraTarget();
   }
 
   private handleRemoteMove(payload: PlayerUpdatedPayload) {
@@ -497,6 +500,32 @@ export class MultiplayerScene extends Phaser.Scene {
     this.clearBombs();
     this.clearFlames();
     this.clearPowerUps();
+  }
+
+  private updateCameraTarget() {
+    if (!this.localAvatar) {
+      return;
+    }
+
+    if (this.localAvatar.state.alive) {
+      if (this.spectatorFollowId !== this.selfId) {
+        this.cameras.main.startFollow(this.localAvatar.root, true, 0.15, 0.15);
+        this.spectatorFollowId = this.selfId;
+      }
+      return;
+    }
+
+    const aliveRemoteAvatar = [...this.remotePlayers.values()].find((avatar) => avatar.state.alive);
+    if (!aliveRemoteAvatar) {
+      return;
+    }
+
+    if (this.spectatorFollowId === aliveRemoteAvatar.state.id) {
+      return;
+    }
+
+    this.cameras.main.startFollow(aliveRemoteAvatar.root, true, 0.12, 0.12);
+    this.spectatorFollowId = aliveRemoteAvatar.state.id;
   }
 
   private createBombView(bomb: BombState): BombView {
