@@ -3,14 +3,28 @@ import {
   MAP_WIDTH,
   SPAWN_TILES,
   TILE_SIZE,
+  type ArenaId,
   type SpawnTile,
   type TileType
 } from "./protocol.js";
 
-export const DEFAULT_ROUND_GRID = createRoundGrid();
+export type ArenaDefinition = {
+  id: ArenaId;
+  name: string;
+};
+
+export const ARENAS: readonly ArenaDefinition[] = [
+  { id: "classic-yard", name: "Classic Yard" },
+  { id: "tight-corners", name: "Tight Corners" },
+  { id: "crossfire", name: "Crossfire" },
+  { id: "islands", name: "Islands" }
+] as const;
+
+export const DEFAULT_ARENA_ID: ArenaId = "classic-yard";
+export const DEFAULT_ROUND_GRID = createRoundGrid(DEFAULT_ARENA_ID);
 export const blockedTiles = toBlockedTileSet(DEFAULT_ROUND_GRID);
 
-export function createRoundGrid(): TileType[][] {
+export function createRoundGrid(arenaId: ArenaId = DEFAULT_ARENA_ID): TileType[][] {
   const grid = createEmptyGrid();
   const safeTiles = createSpawnSafeTileSet(SPAWN_TILES);
 
@@ -25,13 +39,22 @@ export function createRoundGrid(): TileType[][] {
         continue;
       }
 
-      if (shouldPlaceBreakableWall(x, y)) {
+      if (shouldPlaceBreakableWall(x, y, arenaId)) {
         grid[y][x] = "breakable";
       }
     }
   }
 
   return grid;
+}
+
+export function getArenaDefinition(arenaId: ArenaId): ArenaDefinition {
+  return ARENAS.find((arena) => arena.id === arenaId) ?? ARENAS[0];
+}
+
+export function selectArenaIdForRoom(roomId: string): ArenaId {
+  const hash = [...roomId].reduce((total, character) => total + character.charCodeAt(0), 0);
+  return ARENAS[hash % ARENAS.length].id;
 }
 
 export function cloneGrid(grid: TileType[][]): TileType[][] {
@@ -110,8 +133,23 @@ function isInteriorPillar(tileX: number, tileY: number): boolean {
   return tileX % 2 === 0 && tileY % 2 === 0;
 }
 
-function shouldPlaceBreakableWall(tileX: number, tileY: number): boolean {
-  return (tileX + tileY) % 3 === 0 || (tileX % 3 === 1 && tileY % 2 === 1);
+function shouldPlaceBreakableWall(tileX: number, tileY: number, arenaId: ArenaId): boolean {
+  switch (arenaId) {
+    case "tight-corners":
+      return (tileX + tileY) % 2 === 1 || (tileX % 3 === 1 && tileY % 3 !== 0);
+    case "crossfire":
+      if (tileX === Math.floor(MAP_WIDTH / 2) || tileY === Math.floor(MAP_HEIGHT / 2)) {
+        return false;
+      }
+      return (tileX + tileY) % 3 === 0 || (tileX % 4 === 1 && tileY % 2 === 1);
+    case "islands":
+      if ((tileX === 3 || tileX === MAP_WIDTH - 4) && tileY > 2 && tileY < MAP_HEIGHT - 3) {
+        return false;
+      }
+      return (tileX + tileY) % 4 === 0 || (tileX % 3 === 1 && tileY % 2 === 1);
+    case "classic-yard":
+      return (tileX + tileY) % 3 === 0 || (tileX % 3 === 1 && tileY % 2 === 1);
+  }
 }
 
 function isWithinBounds(tileX: number, tileY: number): boolean {

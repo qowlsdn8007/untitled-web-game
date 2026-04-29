@@ -20,6 +20,7 @@ export const POWER_UP_MAX_SPEED = 360;
 
 export type Direction = "up" | "down" | "left" | "right";
 export type TileType = "empty" | "solid" | "breakable";
+export type ArenaId = "classic-yard" | "tight-corners" | "crossfire" | "islands";
 export type MatchStatus = "waiting" | "starting" | "running" | "finished";
 export type PowerUpType = "bomb_up" | "flame_up" | "speed_up";
 export type JoinMode = "room" | "quick";
@@ -140,6 +141,8 @@ export type WorldInitPayload = {
   selfId: string;
   roomId: string;
   mapId: string;
+  arenaId: ArenaId;
+  arenaName: string;
   grid: TileType[][];
   players: PlayerState[];
   bombs: BombState[];

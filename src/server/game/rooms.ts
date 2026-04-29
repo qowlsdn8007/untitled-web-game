@@ -1,4 +1,5 @@
 import { MAX_PLAYERS, type JoinPayload } from "../../shared/protocol.js";
+import { selectArenaIdForRoom } from "../../shared/map.js";
 import { createInitialGameState, type GameState } from "./state.js";
 
 export type RoomRegistry = Map<string, GameState>;
@@ -17,7 +18,7 @@ export function getOrCreateRoomState(roomStates: RoomRegistry, roomId: string): 
     return existing;
   }
 
-  const next = createInitialGameState();
+  const next = createInitialGameState(selectArenaIdForRoom(roomId));
   roomStates.set(roomId, next);
   return next;
 }

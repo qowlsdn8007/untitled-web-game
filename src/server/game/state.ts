@@ -10,13 +10,16 @@ import {
   type PlayerInputState,
   type PlayerState,
   type PowerUpState,
+  type ArenaId,
   type TileType,
   tileToPixelCenter
 } from "../../shared/protocol.js";
-import { cloneGrid, createRoundGrid } from "../../shared/map.js";
+import { cloneGrid, createRoundGrid, DEFAULT_ARENA_ID, getArenaDefinition } from "../../shared/map.js";
 
 export type GameState = {
   mapId: string;
+  arenaId: ArenaId;
+  arenaName: string;
   grid: TileType[][];
   players: Map<string, PlayerState>;
   playerInputs: Map<string, PlayerInputState>;
@@ -28,10 +31,14 @@ export type GameState = {
   pendingRestartTimer: NodeJS.Timeout | null;
 };
 
-export function createInitialGameState(): GameState {
+export function createInitialGameState(arenaId: ArenaId = DEFAULT_ARENA_ID): GameState {
+  const arena = getArenaDefinition(arenaId);
+
   return {
     mapId: MAP_ID,
-    grid: createRoundGrid(),
+    arenaId: arena.id,
+    arenaName: arena.name,
+    grid: createRoundGrid(arena.id),
     players: new Map<string, PlayerState>(),
     playerInputs: new Map<string, PlayerInputState>(),
     bombs: new Map<string, BombState>(),
@@ -109,7 +116,7 @@ export function createFinishedMatchState(round: number, winnerId: string | null,
 }
 
 export function resetRoundState(state: GameState): void {
-  state.grid = createRoundGrid();
+  state.grid = createRoundGrid(state.arenaId);
   state.bombs.clear();
   state.flames = [];
   state.powerUps.clear();
@@ -137,6 +144,8 @@ export function createWorldSnapshot(state: GameState, selfId: string, roomId: st
     selfId,
     roomId,
     mapId: state.mapId,
+    arenaId: state.arenaId,
+    arenaName: state.arenaName,
     grid: cloneGrid(state.grid),
     players: [...state.players.values()].map((player) => ({ ...player })),
     bombs: [...state.bombs.values()].map((bomb) => ({ ...bomb })),

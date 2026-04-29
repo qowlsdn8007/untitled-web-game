@@ -32,6 +32,7 @@ export default function App() {
   const [match, setMatch] = useState<MatchState | null>(null);
   const [selfPlayer, setSelfPlayer] = useState<PlayerState | null>(null);
   const [currentRoomId, setCurrentRoomId] = useState<string | null>(null);
+  const [arenaName, setArenaName] = useState<string | null>(null);
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [inviteStatus, setInviteStatus] = useState("");
 
@@ -66,6 +67,7 @@ export default function App() {
     socket.on("world:init", (payload) => {
       selfIdRef.current = payload.selfId;
       setCurrentRoomId(payload.roomId);
+      setArenaName(payload.arenaName);
       setRoomCode(payload.roomId);
       syncRoomUrl(payload.roomId);
       setMatch(payload.match);
@@ -160,6 +162,7 @@ export default function App() {
       socketRef.current = null;
       selfIdRef.current = null;
       setCurrentRoomId(null);
+      setArenaName(null);
       setReadyCount(0);
       game.destroy(true);
       gameRef.current = null;
@@ -288,6 +291,10 @@ export default function App() {
           <div>
             <dt>방 코드</dt>
             <dd>{currentRoomId ?? "-"}</dd>
+          </div>
+          <div>
+            <dt>아레나</dt>
+            <dd>{arenaName ?? "-"}</dd>
           </div>
           <div>
             <dt>라운드</dt>
