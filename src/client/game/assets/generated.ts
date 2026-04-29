@@ -1,18 +1,5 @@
 import Phaser from "phaser";
-import type { PowerUpType } from "../../shared/protocol";
-
-export const GAME_ASSETS = {
-  playerLocal: "player.local",
-  playerLocalMoving: "player.local.moving",
-  playerRemote: "player.remote",
-  playerRemoteMoving: "player.remote.moving",
-  playerKo: "player.ko",
-  bomb: "bomb.default",
-  flame: "flame.default",
-  powerUpBomb: "powerup.bomb",
-  powerUpFlame: "powerup.flame",
-  powerUpSpeed: "powerup.speed"
-} as const;
+import { GAME_ASSETS } from "./manifest";
 
 export function createGeneratedGameTextures(scene: Phaser.Scene) {
   createPlayerTexture(scene, GAME_ASSETS.playerLocal, 0xf59e0b, 0xffedd5, 0x7c2d12);
@@ -25,29 +12,6 @@ export function createGeneratedGameTextures(scene: Phaser.Scene) {
   createPowerUpTexture(scene, GAME_ASSETS.powerUpBomb, 0x2563eb);
   createPowerUpTexture(scene, GAME_ASSETS.powerUpFlame, 0xea580c);
   createPowerUpTexture(scene, GAME_ASSETS.powerUpSpeed, 0x16a34a);
-}
-
-export function getPlayerTexture(isLocal: boolean, alive: boolean, moving: boolean) {
-  if (!alive) {
-    return GAME_ASSETS.playerKo;
-  }
-
-  if (isLocal) {
-    return moving ? GAME_ASSETS.playerLocalMoving : GAME_ASSETS.playerLocal;
-  }
-
-  return moving ? GAME_ASSETS.playerRemoteMoving : GAME_ASSETS.playerRemote;
-}
-
-export function getPowerUpTexture(type: PowerUpType) {
-  switch (type) {
-    case "bomb_up":
-      return GAME_ASSETS.powerUpBomb;
-    case "flame_up":
-      return GAME_ASSETS.powerUpFlame;
-    case "speed_up":
-      return GAME_ASSETS.powerUpSpeed;
-  }
 }
 
 function createPlayerTexture(scene: Phaser.Scene, key: string, fillColor: number, highlightColor: number, shadowColor: number) {

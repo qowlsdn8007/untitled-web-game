@@ -19,7 +19,7 @@ import {
   type WorldUpdatedPayload,
   type WorldInitPayload
 } from "../../shared/protocol";
-import { createGeneratedGameTextures, GAME_ASSETS, getPlayerTexture, getPowerUpTexture } from "./assets";
+import { ensureFallbackGameAssets, GAME_ASSETS, getPlayerTexture, getPowerUpTexture, preloadGameAssets } from "./assets";
 import { drawMap } from "./map";
 import type { GameSocket } from "../network/gameSocket";
 
@@ -112,12 +112,13 @@ export class MultiplayerScene extends Phaser.Scene {
   }
 
   preload() {
+    preloadGameAssets(this);
     this.cursors = this.input.keyboard?.createCursorKeys();
     this.placeBombKey = this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
   }
 
   create() {
-    createGeneratedGameTextures(this);
+    ensureFallbackGameAssets(this);
     this.mapGraphics = this.add.graphics();
     drawMap(this.mapGraphics, this.currentGrid);
 
