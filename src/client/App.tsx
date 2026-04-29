@@ -14,13 +14,26 @@ import {
 
 const GAME_WIDTH = MAP_WIDTH * TILE_SIZE;
 const GAME_HEIGHT = MAP_HEIGHT * TILE_SIZE;
+const PROFILE_NAME_STORAGE_KEY = "bomberman.profile.nickname";
+const LOCAL_STATS_STORAGE_KEY = "bomberman.local.stats";
+
+type LocalStats = {
+  roundsPlayed: number;
+  wins: number;
+  losses: number;
+  draws: number;
+  selfKos: number;
+  bombsPlaced: number;
+};
 
 export default function App() {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const gameRef = useRef<Phaser.Game | null>(null);
   const socketRef = useRef<GameSocket | null>(null);
   const selfIdRef = useRef<string | null>(null);
-  const [nickname, setNickname] = useState("");
+  const lastRecordedRoundRef = useRef<string | null>(null);
+  const lastRecordedKoRoundRef = useRef<string | null>(null);
+  const [nickname, setNickname] = useState(() => loadNickname());
   const [roomCode, setRoomCode] = useState(() => getInitialRoomCode());
   const [submittedNickname, setSubmittedNickname] = useState("");
   const [submittedRoomCode, setSubmittedRoomCode] = useState("");
@@ -35,6 +48,7 @@ export default function App() {
   const [arenaName, setArenaName] = useState<string | null>(null);
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [inviteStatus, setInviteStatus] = useState("");
+  const [localStats, setLocalStats] = useState<LocalStats>(() => loadLocalStats());
 
   useEffect(() => {
     if (!submittedNickname || !submittedRoomCode) {
@@ -43,6 +57,48 @@ export default function App() {
 
     setStatus(describeStatus(isConnected, match));
   }, [isConnected, match, submittedNickname, submittedRoomCode]);
+
+  useEffect(() => {
+    localStorage.setItem(LOCAL_STATS_STORAGE_KEY, JSON.stringify(localStats));
+  }, [localStats]);
+
+  useEffect(() => {
+    if (!match || match.status !== "finished" || !currentRoomId) {
+      return;
+    }
+
+    const selfId = selfIdRef.current;
+    const roundKey = `${currentRoomId}:${match.round}:${match.winnerId ?? "draw"}`;
+    if (!selfId || lastRecordedRoundRef.current === roundKey) {
+      return;
+    }
+
+    lastRecordedRoundRef.current = roundKey;
+    setLocalStats((current) => ({
+      ...current,
+      roundsPlayed: current.roundsPlayed + 1,
+      wins: match.winnerId === selfId ? current.wins + 1 : current.wins,
+      losses: match.winnerId && match.winnerId !== selfId ? current.losses + 1 : current.losses,
+      draws: match.winnerId ? current.draws : current.draws + 1
+    }));
+  }, [currentRoomId, match]);
+
+  useEffect(() => {
+    if (!match || match.status !== "running" || !selfPlayer || selfPlayer.alive || !currentRoomId) {
+      return;
+    }
+
+    const koKey = `${currentRoomId}:${match.round}`;
+    if (lastRecordedKoRoundRef.current === koKey) {
+      return;
+    }
+
+    lastRecordedKoRoundRef.current = koKey;
+    setLocalStats((current) => ({
+      ...current,
+      selfKos: current.selfKos + 1
+    }));
+  }, [currentRoomId, match, selfPlayer]);
 
   useEffect(() => {
     if (match?.status !== "starting") {
@@ -98,6 +154,17 @@ export default function App() {
           ...payload
         };
       });
+    });
+
+    socket.on("bomb:placed", (payload) => {
+      if (payload.playerId !== selfIdRef.current) {
+        return;
+      }
+
+      setLocalStats((current) => ({
+        ...current,
+        bombsPlaced: current.bombsPlaced + 1
+      }));
     });
 
     socket.on("world:updated", (payload) => {
@@ -179,6 +246,7 @@ export default function App() {
     }
 
     setSubmittedNickname(trimmed);
+    localStorage.setItem(PROFILE_NAME_STORAGE_KEY, trimmed);
     setSubmittedRoomCode(normalizeRoomCode(roomCode));
     setSubmittedJoinMode("room");
     setInviteStatus("");
@@ -193,6 +261,7 @@ export default function App() {
     }
 
     setSubmittedNickname(trimmed);
+    localStorage.setItem(PROFILE_NAME_STORAGE_KEY, trimmed);
     setSubmittedRoomCode("quick");
     setSubmittedJoinMode("quick");
     setInviteStatus("");
@@ -326,6 +395,28 @@ export default function App() {
           </div>
         </dl>
 
+        <section className="stats-panel" aria-label="로컬 플레이 기록">
+          <h2>Local Stats</h2>
+          <div>
+            <span>Rounds</span>
+            <strong>{localStats.roundsPlayed}</strong>
+          </div>
+          <div>
+            <span>W / L / D</span>
+            <strong>
+              {localStats.wins} / {localStats.losses} / {localStats.draws}
+            </strong>
+          </div>
+          <div>
+            <span>Self KO</span>
+            <strong>{localStats.selfKos}</strong>
+          </div>
+          <div>
+            <span>Bombs</span>
+            <strong>{localStats.bombsPlaced}</strong>
+          </div>
+        </section>
+
         {submittedNickname ? (
           <button className="ready-action" type="button" onClick={handleReadyToggle} disabled={!isConnected || !canToggleReady(match)}>
             {selfPlayer?.ready ? "준비 취소" : "Ready"}
@@ -361,6 +452,30 @@ export default function App() {
 function normalizeRoomCode(value: string) {
   const trimmed = value.trim().toLowerCase().slice(0, 24);
   return trimmed.length > 0 ? trimmed : "public-1";
+}
+
+function loadNickname() {
+  return localStorage.getItem(PROFILE_NAME_STORAGE_KEY) ?? "";
+}
+
+function loadLocalStats(): LocalStats {
+  const fallback: LocalStats = {
+    roundsPlayed: 0,
+    wins: 0,
+    losses: 0,
+    draws: 0,
+    selfKos: 0,
+    bombsPlaced: 0
+  };
+
+  try {
+    return {
+      ...fallback,
+      ...JSON.parse(localStorage.getItem(LOCAL_STATS_STORAGE_KEY) ?? "{}")
+    };
+  } catch {
+    return fallback;
+  }
 }
 
 function getInitialRoomCode() {
